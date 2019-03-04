@@ -510,4 +510,16 @@ j9mem_deallocate_portLibrary(void *memoryPointer);
 extern J9_CFUNC int32_t
 j9port_control(struct J9PortLibrary *portLibrary, const char *key, uintptr_t value);
 
+/* j9cr */
+extern J9_CFUNC int32_t
+j9cr_create_checkpoint(struct J9PortLibrary *portLibrary);
+extern J9_CFUNC BOOLEAN 
+j9cr_checkpoint_exists(struct J9PortLibrary *portLibrary);
+extern J9_CFUNC int32_t
+j9cr_restore(struct J9PortLibrary *portLibrary);
+extern J9_CFUNC int32_t
+j9cr_startup(struct J9PortLibrary *portLibrary);
+extern J9_CFUNC void
+j9cr_shutdown(struct J9PortLibrary *portLibrary);
+
 #endif

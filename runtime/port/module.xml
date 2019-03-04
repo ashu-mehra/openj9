@@ -142,6 +142,7 @@
 			<exclude-if condition="spec.zos_390-64.*"/>
 		</object>
 		<object name="ut_j9prt" />
+		<object name="j9cr" />
 	</objects>
 	
 	<!-- vendor_port_flags.xml can contain vendor specific configuration -->

@@ -25,6 +25,12 @@
 FROM ubuntu:16.04
 
 # Install required OS tools
+RUN apt-get update && apt-get install -y --no-install-recommends criu iptables gdb vim \
+    libprotobuf-dev libprotobuf-c0-dev protobuf-c-compiler protobuf-compiler python-protobuf \
+    pkg-config python-ipaddress libbsd-dev iproute2 libcap-dev libnl-3-dev libnet-dev libaio-dev \
+    python3-future \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN apt-get update \
   && apt-get install -qq -y --no-install-recommends \
     software-properties-common \
@@ -86,6 +92,8 @@ RUN cd /root \
   && tar -xzf bootjdk10.tar.gz \
   && rm -f bootjdk10.tar.gz \
   && mv $(ls | grep -i jdk) bootjdk10
+
+ADD criu /root/criu
 
 # Set environment variable JAVA_HOME, and prepend ${JAVA_HOME}/bin to PATH
 ENV JAVA_HOME="/root/bootjdk10"

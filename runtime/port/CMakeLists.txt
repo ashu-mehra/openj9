@@ -50,6 +50,7 @@ list(APPEND OBJECTS
 	j9sysinfo_helpers.c
 	j9mem_basic.c
 	j9portcontrol.c
+	j9cr.c
 )
 if(OMR_ARCH_X86)
 	list(APPEND OBJECTS

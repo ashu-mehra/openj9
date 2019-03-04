@@ -513,6 +513,17 @@ typedef struct J9PortLibrary {
 #endif /* OMR_GC_CONCURRENT_SCAVENGER */
 	/** see @ref j9j9portcontrol.c::j9port_control "j9port_control"*/
 	int32_t (*port_control)(struct J9PortLibrary *portLibrary, const char *key, uintptr_t value) ;
+	/** see @ref j9cr.c::j9cr_startup "j9cr_startup"*/
+	int32_t (*cr_startup)(struct J9PortLibrary *portLibrary);
+	/** see @ref j9cr.c::j9cr_create_checkpoint "j9cr_create_checkpoint"*/
+	int32_t (*cr_create_checkpoint)(struct J9PortLibrary *portLibrary);
+	/** see @ref j9cr.c::j9cr_checkpoint_exists "j9cr_checkpoint_exists"*/
+	BOOLEAN (*cr_checkpoint_exists)(struct J9PortLibrary *portLibrary);
+	/** see @ref j9cr.c::j9cr_restore "j9cr_restore"*/
+	int32_t (*cr_restore)(struct J9PortLibrary *portLibrary);
+	/** see @ref j9cr.c::j9cr_shutdown "j9cr_shutdown"*/
+	void (*cr_shutdown)(struct J9PortLibrary *portLibrary);
+
 } J9PortLibrary;
 
 #if defined(OMR_PORT_CAN_RESERVE_SPECIFIC_ADDRESS)
@@ -776,6 +787,11 @@ extern J9_CFUNC int32_t j9port_isCompatible(struct J9PortLibraryVersion *expecte
 #define j9ipcmutex_acquire(param1) privatePortLibrary->ipcmutex_acquire(privatePortLibrary,param1)
 #define j9ipcmutex_release(param1) privatePortLibrary->ipcmutex_release(privatePortLibrary,param1)
 #define j9port_control(param1,param2) privatePortLibrary->port_control(privatePortLibrary,param1,param2)
+#define j9cr_startup() privatePortLibrary->cr_startup(privatePortLibrary)
+#define j9cr_create_checkpoint() privatePortLibrary->cr_create_checkpoint(privatePortLibrary)
+#define j9cr_checkpoint_exists() privatePortLibrary->cr_checkpoint_exists(privatePortLibrary)
+#define j9cr_restore() privatePortLibrary->cr_restore(privatePortLibrary)
+#define j9cr_shutdown() privatePortLibrary->cr_shutdown(privatePortLibrary)
 #define j9sig_startup() OMRPORT_FROM_J9PORT(privatePortLibrary)->sig_startup(OMRPORT_FROM_J9PORT(privatePortLibrary))
 #define j9sig_shutdown() OMRPORT_FROM_J9PORT(privatePortLibrary)->sig_shutdown(OMRPORT_FROM_J9PORT(privatePortLibrary))
 #define j9sig_protect(param1,param2,param3,param4,param5,param6) OMRPORT_FROM_J9PORT(privatePortLibrary)->sig_protect((OMRPortLibrary*)privatePortLibrary,(omrsig_protected_fn)param1,param2,(omrsig_handler_fn)param3,param4,param5,param6)

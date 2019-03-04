@@ -192,6 +192,12 @@ Java_java_lang_System_startSNMPAgent(JNIEnv *env, jclass jlClass);
 
 extern J9_CFUNC void JNICALL
 Java_java_lang_System_rasInitializeVersion(JNIEnv * env, jclass unusedClass, jstring javaRuntimeVersion);
+extern J9_CFUNC jint JNICALL
+Java_java_lang_System_createCheckpoint(JNIEnv * env, jclass unusedClass);
+extern J9_CFUNC jboolean JNICALL
+Java_java_lang_System_restorefromCheckpoint(JNIEnv * env, jclass unusedClass);
+extern J9_CFUNC jboolean JNICALL
+Java_java_lang_System_checkpointExists(JNIEnv * env, jclass unusedClass);
 
 /* J9SourceManagementMemoryPool*/
 extern J9_CFUNC jlong JNICALL

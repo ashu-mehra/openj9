@@ -222,7 +222,12 @@ static J9PortLibrary MasterPortLibraryTable = {
 	j9gs_deinitialize,
 	j9gs_isEnabled,
 #endif /* OMR_GC_CONCURRENT_SCAVENGER */
-	j9port_control
+	j9port_control,
+	j9cr_startup,
+	j9cr_create_checkpoint,
+	j9cr_checkpoint_exists,
+	j9cr_restore,
+	j9cr_shutdown
 };
 
 /**
@@ -279,6 +284,7 @@ j9port_shutdown_library(struct J9PortLibrary *portLibrary)
 	 * safely shutdown.
 	 */
 	if (NULL != portLibrary->portGlobals) {
+		portLibrary->cr_shutdown(portLibrary);
 		portLibrary->shmem_shutdown(portLibrary);
 		portLibrary->shsem_shutdown(portLibrary);
 		portLibrary->shsem_deprecated_shutdown(portLibrary);
@@ -460,6 +466,11 @@ j9port_startup_library(struct J9PortLibrary *portLibrary)
 	}
 	
 	rc = portLibrary->shmem_startup(portLibrary);
+	if (0 != rc) {
+		goto cleanup;
+	}
+
+	rc = portLibrary->cr_startup(portLibrary);
 	if (0 != rc) {
 		goto cleanup;
 	}

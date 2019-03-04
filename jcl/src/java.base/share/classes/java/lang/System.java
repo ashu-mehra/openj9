@@ -1261,6 +1261,10 @@ public static Logger getLogger(String loggerName, ResourceBundle bundle) {
 	return LoggerFinder.getLoggerFinder().getLocalizedLogger(loggerName, bundle, caller.getModule());
 }
 
+public static native int createCheckpoint();
+public static native boolean checkpointExists();
+public static native boolean restoreFromCheckpoint();
+
 /**
  * The LoggerFinder service creates, manages and configures loggers
  * to the underlying framework it uses.

@@ -41,6 +41,7 @@ typedef struct J9PortPlatformGlobals {
 	int si_l1DCacheLineSize;
 #endif
 	J9STFLECache stfleCache;
+	uintptr_t criuLibHandle;
 } J9PortPlatformGlobals;
 
 #if !(defined(RS6000) || defined (LINUXPPC) || defined (PPC))
@@ -53,6 +54,7 @@ typedef struct J9PortPlatformGlobals {
 #define PAGE_PROTECTION_NOTCHECKED 2
 #endif
 
+#define PPG_criuLibHandle (portLibrary->portGlobals->platformGlobals.criuLibHandle)
 #define PPG_stfleCache (portLibrary->portGlobals->platformGlobals.stfleCache)
 
 #endif /* j9portpg_h */

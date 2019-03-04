@@ -556,3 +556,37 @@ Java_java_lang_System_rasInitializeVersion(JNIEnv * env, jclass unusedClass, jst
 	}
 #endif /* J9VM_RAS_EYECATCHERS */
 }
+
+jint JNICALL
+Java_java_lang_System_createCheckpoint(JNIEnv * env, jclass unusedClass)
+{
+	PORT_ACCESS_FROM_ENV(env);
+		
+	return (jint)j9cr_create_checkpoint();
+}
+
+jboolean JNICALL
+Java_java_lang_System_restoreFromCheckpoint(JNIEnv * env, jclass unusedClass)
+{
+	int32_t rc = 0;
+	PORT_ACCESS_FROM_ENV(env);
+		
+	rc = j9cr_restore();
+	if (rc > 0) {
+		return JNI_TRUE;
+	} else {
+		return JNI_FALSE;
+	}
+}
+
+jboolean JNICALL
+Java_java_lang_System_checkpointExists(JNIEnv * env, jclass unusedClass)
+{
+	PORT_ACCESS_FROM_ENV(env);
+
+	if (j9cr_checkpoint_exists()) {
+		return JNI_TRUE;
+	} else {
+		return JNI_FALSE;
+	}
+}
