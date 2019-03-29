@@ -1293,6 +1293,7 @@ typedef struct J9SpecialArguments {
 	UDATA *argEncoding;
 	IDATA *ibmMallocTraceSet;
 	const char *executableJarPath;
+	BOOLEAN enableRamUsageTracking;
 } J9SpecialArguments;
 /**
  * Look for special options:
@@ -1311,6 +1312,7 @@ initialArgumentScan(JavaVMInitArgs *args, J9SpecialArguments *specialArgs)
 	const char *javaCommandValue = NULL;
 	const char *classPath = "-Djava.class.path=";
 	const char *classPathValue = NULL;
+	const char *enableRamUsageTracking = "-XX:EnableRamUsageTracking";
 	jint argCursor;
 	UDATA argumentsSize = 0;
 
@@ -1338,6 +1340,8 @@ initialArgumentScan(JavaVMInitArgs *args, J9SpecialArguments *specialArgs)
 			*(specialArgs->argEncoding) = ARG_ENCODING_UTF;
 		} else if (0 == strcmp(args->options[argCursor].optionString, VMOPT_XARGENCODINGLATIN)) {
 			*(specialArgs->argEncoding) = ARG_ENCODING_LATIN;
+		} else if (0 == strcmp(args->options[argCursor].optionString, VMOPT_XXENABLERAMUSAGETRACKING)) {
+			specialArgs->enableRamUsageTracking = TRUE;
 		}
 	}
 
@@ -1815,6 +1819,9 @@ jint JNICALL JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *vm_args) {
 		createParams.flags |= J9_CREATEJAVAVM_VERBOSE_INIT;
 	}
 
+	if (specialArgs.enableRamUsageTracking) {
+		j9portLibrary.omrPortLibrary.port_control(&j9portLibrary.omrPortLibrary, OMRPORT_CTLDATA_ENABLE_RAM_USAGE_TRACKING, TRUE); 		
+	}
 	if (ibmMallocTraceSet) {
 		/* We have no access to the original command line, so cannot
 		 * pass in a valid argv to this function.

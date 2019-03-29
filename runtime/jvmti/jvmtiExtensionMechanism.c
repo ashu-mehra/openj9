@@ -104,6 +104,7 @@ static UDATA jvmtiCalculateSlotsForCategoriesMappingCallback(U_32 categoryCode, 
 static void fillInChildAndSiblingCategories(jvmtiMemoryCategory * categories_buffer, jint written_count);
 static void fillInCategoryDeepCounters(jvmtiMemoryCategory * category);
 static jvmtiError JNICALL jvmtiGetMemoryCategories(jvmtiEnv* env, jint version, jint max_categories, jvmtiMemoryCategory * categories_buffer, jint * written_count_ptr, jint * total_categories_ptr, ...);
+static jvmtiError JNICALL jvmtiUpdateMemoryCategories(jvmtiEnv* env, jint version, jint buffer_size, jvmtiMemoryCategory * categories_buffer);
 
 static jvmtiError JNICALL jvmtiRegisterVerboseGCSubscriber(jvmtiEnv *env, char *description, jvmtiVerboseGCSubscriber subscriber, jvmtiVerboseGCAlarm alarm, void *userData, void **subscriptionID, ...);
 static jvmtiError JNICALL jvmtiDeregisterVerboseGCSubscriber(jvmtiEnv *env, void *subscriberID, ...);
@@ -308,6 +309,13 @@ static const jvmtiParamInfo jvmtiGetMemoryCategories_params[] = {
 	{ "total_categories_ptr", JVMTI_KIND_OUT, JVMTI_TYPE_JINT, JNI_TRUE }
 };
 
+/* (jvmtiEnv* env, jint version, jint max_categories, jvmtiMemoryCategory * categories_buffer, jint * written_count_ptr, jint * total_categories_ptr) */
+static const jvmtiParamInfo jvmtiUpdateMemoryCategories_params[] = {
+	{ "version", JVMTI_KIND_IN, JVMTI_TYPE_JINT, JNI_FALSE },
+	{ "buffer_size", JVMTI_KIND_IN, JVMTI_TYPE_JINT, JNI_FALSE },
+	{ "categories_buffer",  JVMTI_KIND_OUT_BUF, JVMTI_TYPE_CCHAR, JNI_FALSE },
+};
+
 /* (jvmtiEnv *env, char *description, jvmtiVerboseGCSubscriber subscriber, jvmtiVerboseGCAlarm alarm, void *userData, void **subscriptionID) */
 static const jvmtiParamInfo jvmtiRegisterVerboseGCSubscriber_params[] = {
 	{ "description", JVMTI_KIND_IN_PTR, JVMTI_TYPE_CCHAR, JNI_FALSE },
@@ -455,6 +463,11 @@ static const jvmtiError jvmtiGetMemoryCategories_errors[] = {
 	JVMTI_ERROR_OUT_OF_MEMORY
 };
  
+static const jvmtiError jvmtiUpdateMemoryCategories_errors[] = {
+	JVMTI_ERROR_UNSUPPORTED_VERSION,
+	JVMTI_ERROR_ILLEGAL_ARGUMENT
+};
+
 static const jvmtiError jvmtiRegisterVerboseGCSubscriber_errors[] = {
 	JVMTI_ERROR_NULL_POINTER,
 	JVMTI_ERROR_OUT_OF_MEMORY,
@@ -683,6 +696,13 @@ static const J9JVMTIExtensionFunctionInfo J9JVMTIExtensionFunctionInfoTable[] = 
 		J9NLS_JVMTI_COM_IBM_GET_MEMORY_CATEGORIES_DESCRIPTION,
 		SIZE_AND_TABLE(jvmtiGetMemoryCategories_params),
 		SIZE_AND_TABLE(jvmtiGetMemoryCategories_errors)
+	},
+	{
+		(jvmtiExtensionFunction) jvmtiUpdateMemoryCategories,
+		COM_IBM_GET_MEMORY_CATEGORIES,
+		J9NLS_JVMTI_COM_IBM_GET_MEMORY_CATEGORIES_DESCRIPTION,
+		SIZE_AND_TABLE(jvmtiUpdateMemoryCategories_params),
+		SIZE_AND_TABLE(jvmtiUpdateMemoryCategories_errors)
 	},
 	{
 		(jvmtiExtensionFunction) jvmtiRegisterVerboseGCSubscriber,
@@ -2809,10 +2829,12 @@ struct jvmtiGetMemoryCategoriesState
 /**
  * Callback used by jvmtiGetMemoryCategories with j9mem_walk_categories
  */
-static UDATA jvmtiGetMemoryCategoriesCallback (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+static UDATA jvmtiGetMemoryCategoriesCallback (OMRMemCategoryWalkState * state)
 {
 	struct jvmtiGetMemoryCategoriesState * userData = (struct jvmtiGetMemoryCategoriesState *) state->userData1;
-	U_32 index = indexFromCategoryCode(userData->categories_mapping_size, categoryCode);
+	OMRMemCategoryCallbackData *data = &state->callbackData;
+	U_32 index = indexFromCategoryCode(userData->categories_mapping_size, data->categoryCode);
+	int32_t apiVersion = (int32_t) state->userData2;
 
 	if (userData->written_count < userData->max_categories) {
 		jvmtiMemoryCategory * jvmtiCategory = userData->categories_buffer + userData->written_count;
@@ -2820,14 +2842,18 @@ static UDATA jvmtiGetMemoryCategoriesCallback (U_32 categoryCode, const char * c
 		/* Record the mapping of index to category */
 		userData->categories_mapping[index] = jvmtiCategory;
 
-		jvmtiCategory->name = categoryName;
-		jvmtiCategory->liveBytesShallow = liveBytes;
-		jvmtiCategory->liveAllocationsShallow = liveAllocations;
+		jvmtiCategory->name = data->categoryName;
+		jvmtiCategory->liveBytesShallow = data->liveBytes;
+		jvmtiCategory->liveAllocationsShallow = data->liveAllocations;
+		if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == apiVersion) {
+			jvmtiCategory->categoryCode = data->categoryCode;
+			jvmtiCategory->bytesInRamShallow = data->bytesInRam;
+		}
 
-		if (isRoot) {
+		if (data->isRoot) {
 			jvmtiCategory->parent = NULL;
 		} else {
-			U_32 parentIndex = indexFromCategoryCode(userData->categories_mapping_size, parentCategoryCode);
+			U_32 parentIndex = indexFromCategoryCode(userData->categories_mapping_size, data->parentCategoryCode);
 
 			/* Memory category walk is depth first - we will definitely have walked through and recorded our parent */
 			jvmtiCategory->parent = userData->categories_mapping[parentIndex];
@@ -2846,7 +2872,7 @@ static UDATA jvmtiGetMemoryCategoriesCallback (U_32 categoryCode, const char * c
 /**
  * Callback used by jvmtiGetMemoryCategories with j9mem_walk_categories
  */
-static UDATA jvmtiCountMemoryCategoriesCallback (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+static UDATA jvmtiCountMemoryCategoriesCallback (OMRMemCategoryWalkState * state)
 {
 	struct jvmtiGetMemoryCategoriesState * userData = (struct jvmtiGetMemoryCategoriesState *) state->userData1;
 	userData->total_categories++;
@@ -2857,19 +2883,19 @@ static UDATA jvmtiCountMemoryCategoriesCallback (U_32 categoryCode, const char *
  * Callback used by jvmtiGetMemoryCategories with j9mem_walk_categories
  */
 static UDATA
-jvmtiCalculateSlotsForCategoriesMappingCallback(U_32 categoryCode, const char *categoryName, UDATA liveBytes,
-		UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState *state)
+jvmtiCalculateSlotsForCategoriesMappingCallback(OMRMemCategoryWalkState *state)
 {
+	OMRMemCategoryCallbackData *data = &state->callbackData;
 
-	if (categoryCode < OMRMEM_LANGUAGE_CATEGORY_LIMIT) {
+	if (data->categoryCode < OMRMEM_LANGUAGE_CATEGORY_LIMIT) {
 		UDATA maxLanguageCategoryIndex = (UDATA)state->userData1;
-		UDATA categoryIndex = (UDATA)categoryCode;
+		UDATA categoryIndex = (UDATA)data->categoryCode;
 
 		state->userData1 = (void *)((maxLanguageCategoryIndex > categoryIndex) ? maxLanguageCategoryIndex : categoryIndex);
 
 	} else if (categoryCode > OMRMEM_LANGUAGE_CATEGORY_LIMIT) {
 		UDATA maxOMRCategoryIndex = (UDATA)state->userData2;
-		UDATA categoryIndex = (UDATA)OMRMEM_OMR_CATEGORY_INDEX_FROM_CODE(categoryCode);
+		UDATA categoryIndex = (UDATA)OMRMEM_OMR_CATEGORY_INDEX_FROM_CODE(data->categoryCode);
 
 		state->userData2 = (void *)((maxOMRCategoryIndex > categoryIndex) ? maxOMRCategoryIndex : categoryIndex);
 	}
@@ -2899,12 +2925,15 @@ static void fillInChildAndSiblingCategories(jvmtiMemoryCategory * categories_buf
 	}
 }
 
-static void fillInCategoryDeepCounters(jvmtiMemoryCategory * category)
+static void fillInCategoryDeepCounters(int32_t apiVersion, jvmtiMemoryCategory * category)
 {
 	jvmtiMemoryCategory * childCursor;
 
 	category->liveBytesDeep = category->liveBytesShallow;
 	category->liveAllocationsDeep = category->liveAllocationsShallow;
+	if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == apiVersion) {
+		category->bytesInRamDeep = category->bytesInRamShallow;
+	}
 
 	childCursor = category->firstChild;
 
@@ -2919,6 +2948,9 @@ static void fillInCategoryDeepCounters(jvmtiMemoryCategory * category)
 	if (category->parent) {
 		category->parent->liveBytesDeep += category->liveBytesDeep;
 		category->parent->liveAllocationsDeep += category->liveAllocationsDeep;
+		if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == apiVersion) {
+			category->parent->bytesInRamDeep += category->bytesInRamDeep;
+		}
 	}
 }
 
@@ -2951,6 +2983,7 @@ jvmtiGetMemoryCategories(jvmtiEnv* env, jint version, jint max_categories, jvmti
 	jint rv_written_count = 0;
 	jint rv_total_categories = 0;
 
+	
 	Trc_JVMTI_jvmtiGetMemoryCategories_Entry(env, version, max_categories, categories_buffer, written_count_ptr, total_categories_ptr);
 
 	memset(&userData, 0, sizeof(struct jvmtiGetMemoryCategoriesState));
@@ -2982,9 +3015,18 @@ jvmtiGetMemoryCategories(jvmtiEnv* env, jint version, jint max_categories, jvmti
 	}
 
 	/* Check the user has the same structure shape as we do */
-	if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_1 != version) {
+	if ((COM_IBM_GET_MEMORY_CATEGORIES_VERSION_1 != version)
+		|| (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 != version)
+	) {
 		Trc_JVMTI_jvmtiGetMemoryCategories_WrongVersion_Exit(version);
 		return JVMTI_ERROR_UNSUPPORTED_VERSION;
+	}
+
+	if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+		/* if platform does not support tracking of memory in RAM, return error */
+		if (!omrport_control(OMRPORT_CTLDATA_IS_RAM_USAGE_TRACKING_ENABLED, 0 /* don't care */)) {
+			return JVMTI_ERROR_UNSUPPORTED_VERSION;
+		}
 	}
 
 	/* We need to allocate space to hold the categories data.
@@ -3008,9 +3050,14 @@ jvmtiGetMemoryCategories(jvmtiEnv* env, jint version, jint max_categories, jvmti
 		/* Both + 1 because we have the max indexes which start from 0 */
 		userData.categories_mapping_size = ((UDATA)walkState.userData1) + 1 + ((UDATA)walkState.userData2) + 1;
 
+		if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+			omrmem_block_memory_allocation();
+			omrmem_update_ram_usage();
+		}
+
 		walkState.walkFunction = jvmtiGetMemoryCategoriesCallback;
 		walkState.userData1 = &userData;
-		walkState.userData2 = 0;
+		walkState.userData2 = version;
 
 		userData.categories_mapping = (jvmtiMemoryCategory**)j9mem_allocate_memory(userData.categories_mapping_size * sizeof(jvmtiMemoryCategory*), J9MEM_CATEGORY_JVMTI);
 		if (NULL == userData.categories_mapping) {
@@ -3035,8 +3082,12 @@ jvmtiGetMemoryCategories(jvmtiEnv* env, jint version, jint max_categories, jvmti
 			jvmtiMemoryCategory * category = categories_buffer + i;
 
 			if (NULL == category->parent) {
-				fillInCategoryDeepCounters(category);
+				fillInCategoryDeepCounters(version, category);
 			}
+		}
+
+		if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+			omrmem_unblock_memory_allocation();
 		}
 
 		if (userData.buffer_overflow) {
@@ -3074,6 +3125,66 @@ jvmtiGetMemoryCategories(jvmtiEnv* env, jint version, jint max_categories, jvmti
 	return rc;
 }
 
+static jvmtiError JNICALL
+jvmtiUpdateMemoryCategories(jvmtiEnv* env, jint version, jint num_categories, jvmtiMemoryCategory * categories_buffer)
+{
+	jvmtiError rc = JVMTI_ERROR_NOT_AVAILABLE;
+	jint i = 0;
+
+	/* If we're asked to update categories_buffer, make sure categories_buffer isn't NULL */
+	if ((num_categories <= 0) || (NULL == categories_buffer)) {
+		Trc_JVMTI_jvmtiGetMemoryCategories_NullOutput_Exit(num_categories);
+		rc = JVMTI_ERROR_ILLEGAL_ARGUMENT;
+		goto _end;
+	}
+
+	/* Check the user has the same structure shape as we do */
+	if ((COM_IBM_GET_MEMORY_CATEGORIES_VERSION_1 != version)
+		|| (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 != version)
+	) {
+		Trc_JVMTI_jvmtiGetMemoryCategories_WrongVersion_Exit(version);
+		rc = JVMTI_ERROR_UNSUPPORTED_VERSION;
+		goto _end;
+	}
+
+	if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+		/* if platform does not support tracking of memory in RAM, return error */
+		if (!omrport_control(OMRPORT_CTLDATA_ENABLE_RAM_USAGE_TRACKING, TRUE)) {
+			rc = JVMTI_ERROR_UNSUPPORTED_VERSION;
+			goto _end;
+		}
+	}
+
+	if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+		omrmem_block_memory_allocation();
+		omrmem_update_ram_usage();
+	}
+
+	for (i = 0; i < num_categories; i++) {
+		jvmtiMemoryCategory *current = categories_buffer[i];
+		OMRMemCategory *category = omrmem_get_category(current->categoryCode);
+		current->liveBytesShallow = category->liveBytes;
+		current->liveAllocationsShallow = category->liveAllocations;
+		if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+			current->bytesInRamShallow = category->bytesInRam;
+		}		
+	}
+
+	if (COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 == version) {
+		omrmem_unblock_memory_allocation();
+	}
+
+	/* Fill-in deep counters */
+	for (i = 0; i < num_categories; i++) {
+		if (NULL == categories_buffer[i].parent) {
+			fillInCategoryDeepCounters(version, categories_buffer+i);
+			break; /* assuming there is only one root category */
+		}
+	}
+
+_end:
+	return rc;
+}
 /*
  * Helper function to unhook a subscriber.
  * Unfortunately J9HookUnregister doesn't return a value, so we can't 

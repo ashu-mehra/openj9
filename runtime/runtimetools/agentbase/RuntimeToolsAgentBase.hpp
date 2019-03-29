@@ -153,7 +153,7 @@ public:
 	{
 		PORT_ACCESS_FROM_JAVAVM(getJavaVM());
 		if (_outputFileNameFD != -1){
-					j9file_printf(PORTLIB,_outputFileNameFD, "%zu",val);
+			j9file_printf(PORTLIB,_outputFileNameFD, "%zu",val);
 		} else {
 			j9tty_printf(PORTLIB, "%zu",val);
 		}
@@ -168,7 +168,7 @@ public:
 	{
 		PORT_ACCESS_FROM_JAVAVM(getJavaVM());
 		if (_outputFileNameFD != -1){
-					j9file_printf(PORTLIB,_outputFileNameFD, "%llu",val);
+			j9file_printf(PORTLIB,_outputFileNameFD, "%llu",val);
 		} else {
 			j9tty_printf(PORTLIB, "%llu",val);
 		}

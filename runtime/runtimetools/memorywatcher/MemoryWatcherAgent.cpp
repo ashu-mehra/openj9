@@ -40,18 +40,20 @@ static MemoryWatcherAgent* memoryWatcherAgent;
  * Callback that handles printing out the memory categories
  *
  */
-static UDATA memCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+static UDATA memCategoryCallBack (OMRMemCategoryWalkState * state)
 {
 	MemoryWatcherAgent* agent = (MemoryWatcherAgent*) state->userData1;
-	agent->message(categoryName);
+	OMRMemCategoryCallbackData *data = &state->callbackData;
+
+	agent->message(data->categoryName);
 	agent->message(":");
-	agent->messageUDATA(liveBytes);
+	agent->messageUDATA(data->liveBytes);
 	agent->message("[");
-	agent->messageIDATA(((IDATA)liveBytes)- (IDATA)(agent->getLastBytes()));
+	agent->messageIDATA(((IDATA)data->liveBytes)- (IDATA)(agent->getLastBytes()));
 	agent->message("]");
 	agent->messageUDATA(agent->getLastBytes());
 	agent->message("\n");
-	agent->setLastBytes(liveBytes);
+	agent->setLastBytes(data->liveBytes);
 	return J9MEM_CATEGORIES_KEEP_ITERATING;
 }
 
@@ -59,7 +61,7 @@ static UDATA memCategoryCallBack (U_32 categoryCode, const char * categoryName, 
  * Callback used by to count memory categories with j9mem_walk_categories
  */
 static UDATA
-countMemoryCategoriesCallback (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+countMemoryCategoriesCallback (OMRMemCategoryWalkState * state)
 {
 	state->userData1 = (void *)((UDATA)state->userData1 + 1);
 	return J9MEM_CATEGORIES_KEEP_ITERATING;

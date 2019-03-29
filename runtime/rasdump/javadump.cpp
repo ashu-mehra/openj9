@@ -79,8 +79,8 @@ UDATA writeExceptionFrameCallBack (J9VMThread* vmThread, void* userData, J9ROMCl
 void  writeLoaderCallBack         (void* classLoader, void* userData);
 void  writeLibrariesCallBack      (void* classLoader, void* userData);
 void  writeClassesCallBack        (void* classLoader, void* userData);
-static UDATA outerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state);
-static UDATA innerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state);
+static UDATA outerMemCategoryCallBack (OMRMemCategoryWalkState * state);
+static UDATA innerMemCategoryCallBack (OMRMemCategoryWalkState * state);
 
 /* Function prototypes */
 static jvmtiIterationControl heapIteratorCallback   (J9JavaVM* vm, J9MM_IterateHeapDescriptor*   heapDescriptor,    void* userData);
@@ -219,8 +219,8 @@ private :
 	friend void  writeLoaderCallBack         (void* classLoader, void* userData);
 	friend void  writeLibrariesCallBack      (void* classLoader, void* userData);
 	friend void  writeClassesCallBack        (void* classLoader, void* userData);
-	friend UDATA outerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state);
-	friend UDATA innerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state);
+	friend UDATA outerMemCategoryCallBack (OMRMemCategoryWalkState * state);
+	friend UDATA innerMemCategoryCallBack (OMRMemCategoryWalkState * state);
 
 	friend jvmtiIterationControl heapIteratorCallback   (J9JavaVM* vm, J9MM_IterateHeapDescriptor*   heapDescriptor,    void* userData);
 	friend jvmtiIterationControl spaceIteratorCallback  (J9JavaVM* vm, J9MM_IterateSpaceDescriptor*  spaceDescriptor,   void* userData);
@@ -1470,7 +1470,7 @@ JavaCoreDumpWriter::writeMemorySection(void)
  * Callback used by to count memory categories with j9mem_walk_categories
  */
 static UDATA
-countMemoryCategoriesCallback (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+countMemoryCategoriesCallback (OMRMemCategoryWalkState * state)
 {
 	(*(I_32 *)state->userData1)++;
 	return J9MEM_CATEGORIES_KEEP_ITERATING;
@@ -1482,16 +1482,17 @@ countMemoryCategoriesCallback (U_32 categoryCode, const char * categoryName, UDA
  * Maintains a total count of all categories beneath total->codeToMatch
  */
 static UDATA
-innerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+innerMemCategoryCallBack (OMRMemCategoryWalkState * state)
 {
 	memcategory_total * total = (memcategory_total *) state->userData1;
 	JavaCoreDumpWriter * writer = (JavaCoreDumpWriter*) state->userData2;
+	OMRMemCategoryCallbackData *data = &state->callbackData;
 
 	if (total->codeMatched) {
-		if (!isRoot && CATEGORY_IS_ANCESTOR(total, parentCategoryCode)) {
-			SET_CATEGORY_AS_ANCESTOR(total, categoryCode);
-			total->liveBytes += liveBytes;
-			total->liveAllocations += liveAllocations;
+		if (!isRoot && CATEGORY_IS_ANCESTOR(total, data->parentCategoryCode)) {
+			SET_CATEGORY_AS_ANCESTOR(total, data->categoryCode);
+			total->liveBytes += data->liveBytes;
+			total->liveAllocations += data->liveAllocations;
 		} else {
 			/* The category walk is depth first. If this node is a root, or this node's parent isn't an ancestor,
 			 * we've walked past the children of the node we're interested in.
@@ -1500,7 +1501,7 @@ innerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA li
 		}
 	} else {
 		/* We haven't found the node we're interested in yet */
-		if (categoryCode == total->codeToMatch) {
+		if (data->categoryCode == total->codeToMatch) {
 			total->codeMatched = TRUE;
 		}
 	}
@@ -1514,29 +1515,30 @@ innerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA li
  * Starts the inner walk and prints the ASCII art lines to the file.
  */
 static UDATA
-outerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * state)
+outerMemCategoryCallBack (OMRMemCategoryWalkState * state)
 {
 	U_32 i;
 	U_32 depth;
 	JavaCoreDumpWriter * writer = (JavaCoreDumpWriter*) state->userData1;
 	memcategory_total total;
 	U_32 oldStackTop = writer->_CategoryStackTop;
+	OMRMemCategoryCallbackData *data = &state->callbackData;
 	PORT_ACCESS_FROM_PORT(writer->_PortLibrary);
 
-	if (isRoot) {
+	if (data->isRoot) {
 		depth = 0;
-		writer->_CategoryStack[0].category = categoryCode;
+		writer->_CategoryStack[0].category = data->categoryCode;
 		writer->_CategoryStackTop = 1;
 	} else {
 		/* Determine our position in the tree by checking the _CategoryStack for our parent */
 		for (i=0; i < writer->_CategoryStackTop; i++) {
-			if (writer->_CategoryStack[i].category == parentCategoryCode) {
+			if (writer->_CategoryStack[i].category == data->parentCategoryCode) {
 				break;
 			}
 		}
 
 		depth = i+1;
-		writer->_CategoryStack[i+1].category = categoryCode;
+		writer->_CategoryStack[i+1].category = data->categoryCode;
 		writer->_CategoryStackTop = i+2;
 	}
 
@@ -1563,11 +1565,11 @@ outerMemCategoryCallBack (U_32 categoryCode, const char * categoryName, UDATA li
 	memset(&total, 0, sizeof(memcategory_total));
 	total.category_bitmask = (U_32*)alloca(writer->_TotalCategories * sizeof(U_32));
 	memset(total.category_bitmask, 0, writer->_TotalCategories * sizeof(U_32));
-	total.liveBytes = liveBytes;
-	total.liveAllocations = liveAllocations;
-	total.codeToMatch = categoryCode;
+	total.liveBytes = data->liveBytes;
+	total.liveAllocations = data->liveAllocations;
+	total.codeToMatch = data->categoryCode;
 	total.codeMatched = FALSE;
-	SET_CATEGORY_AS_ANCESTOR(&total, categoryCode);
+	SET_CATEGORY_AS_ANCESTOR(&total, data->categoryCode);
 
 	OMRMemCategoryWalkState walkState;
 	memset(&walkState, 0, sizeof(OMRMemCategoryWalkState));

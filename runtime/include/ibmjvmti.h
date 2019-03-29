@@ -383,6 +383,7 @@ typedef	struct jvmtiExtensionRamMethodData
  * structure is expanded, IBM will increment this define.
  */
 #define COM_IBM_GET_MEMORY_CATEGORIES_VERSION_1 1
+#define COM_IBM_GET_MEMORY_CATEGORIES_VERSION_2 2
 
 /*
  * Return data for the GetMemoryCategories API
@@ -411,6 +412,10 @@ typedef struct jvmtiMemoryCategory {
 
 	/* Pointer to the parent category. (NULL if this node is a root) */
 	struct jvmtiMemoryCategory * parent;
+
+	jint categoryCode;
+	jlong bytesInRamShallow;
+	jlong bytesInRamsDeep;
 } jvmtiMemoryCategory;
 
 /*

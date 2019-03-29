@@ -722,105 +722,106 @@ struct CategoriesState {
 #endif
 };
 
-static UDATA categoryWalkFunction(U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * walkState)
+static UDATA categoryWalkFunction(OMRMemCategoryWalkState * walkState)
 {
 	J9PortLibrary * portLibrary = (J9PortLibrary*)walkState->userData1;
 	struct CategoriesState * state = (struct CategoriesState *)walkState->userData2;
 	const char* testName = "j9mem_test8_categories - categoryWalkFunction";
+	OMRMemCategoryCallbackData *data = &walkState->callbackData;
 
-	switch (categoryCode) {
+	switch (data->categoryCode) {
 	case DUMMY_CATEGORY_ONE:
-		if (! isRoot) {
+		if (! data->isRoot) {
 			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_ONE should be a root, and isn't\n");
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
-		if (categoryName != dummyCategoryOne.name) {
-			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_ONE has the wrong name: %p=%s instead of %p=%s\n", categoryName, categoryName, dummyCategoryOne.name, dummyCategoryOne.name);
+		if (data->categoryName != dummyCategoryOne.name) {
+			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_ONE has the wrong name: %p=%s instead of %p=%s\n", data->categoryName, data->categoryName, dummyCategoryOne.name, dummyCategoryOne.name);
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
 		state->dummyCategoryOneWalked = TRUE;
-		state->dummyCategoryOneBytes = liveBytes;
-		state->dummyCategoryOneBlocks = liveAllocations;
+		state->dummyCategoryOneBytes = data->liveBytes;
+		state->dummyCategoryOneBlocks = data->liveAllocations;
 
 		break;
 
 	case DUMMY_CATEGORY_TWO:
-		if (isRoot) {
+		if (data->isRoot) {
 			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_TWO shouldn't be a root, and is\n");
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
-		if (DUMMY_CATEGORY_ONE != parentCategoryCode) {
-			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_TWO's parent should be DUMMY_CATEGORY_ONE, not %u\n", parentCategoryCode);
+		if (DUMMY_CATEGORY_ONE != data->parentCategoryCode) {
+			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_TWO's parent should be DUMMY_CATEGORY_ONE, not %u\n", data->parentCategoryCode);
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
-		if (categoryName != dummyCategoryTwo.name) {
-			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_TWO has the wrong name: %p=%s instead of %p=%s\n", categoryName, categoryName, dummyCategoryTwo.name, dummyCategoryTwo.name);
+		if (data->categoryName != dummyCategoryTwo.name) {
+			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_TWO has the wrong name: %p=%s instead of %p=%s\n", data->categoryName, data->categoryName, dummyCategoryTwo.name, dummyCategoryTwo.name);
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
 		state->dummyCategoryTwoWalked = TRUE;
-		state->dummyCategoryTwoBytes = liveBytes;
-		state->dummyCategoryTwoBlocks = liveAllocations;
+		state->dummyCategoryTwoBytes = data->liveBytes;
+		state->dummyCategoryTwoBlocks = data->liveAllocations;
 		break;
 
 	case DUMMY_CATEGORY_THREE:
-		if (isRoot) {
+		if (data->isRoot) {
 			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_THREE shouldn't be a root, and is\n");
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
-		if (DUMMY_CATEGORY_ONE != parentCategoryCode) {
-			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_THREE's parent should be DUMMY_CATEGORY_ONE, not %u\n", parentCategoryCode);
+		if (DUMMY_CATEGORY_ONE != data->parentCategoryCode) {
+			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_THREE's parent should be DUMMY_CATEGORY_ONE, not %u\n", data->parentCategoryCode);
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
-		if (categoryName != dummyCategoryThree.name) {
-			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_THREE has the wrong name: %p=%s instead of %p=%s\n", categoryName, categoryName, dummyCategoryThree.name, dummyCategoryThree.name);
+		if (data->categoryName != dummyCategoryThree.name) {
+			outputErrorMessage(PORTTEST_ERROR_ARGS, "DUMMY_CATEGORY_THREE has the wrong name: %p=%s instead of %p=%s\n", data->categoryName, data->categoryName, dummyCategoryThree.name, dummyCategoryThree.name);
 			state->otherError = TRUE;
 			return J9MEM_CATEGORIES_STOP_ITERATING;
 		}
 
 		state->dummyCategoryThreeWalked = TRUE;
-		state->dummyCategoryThreeBytes = liveBytes;
-		state->dummyCategoryThreeBlocks = liveAllocations;
+		state->dummyCategoryThreeBytes = data->liveBytes;
+		state->dummyCategoryThreeBlocks = data->liveAllocations;
 		break;
 
 	case OMRMEM_CATEGORY_PORT_LIBRARY:
 		/* Root status changes depending on whether we're using the default category set or not. */
 		state->portLibraryWalked = TRUE;
-		state->portLibraryBytes = liveBytes;
-		state->portLibraryBlocks = liveAllocations;
+		state->portLibraryBytes = data->liveBytes;
+		state->portLibraryBlocks = data->liveAllocations;
 
 		break;
 
 	case OMRMEM_CATEGORY_UNKNOWN:
 		/* Root status changes depending on whether we're using the default category set or not. */
 		state->unknownWalked = TRUE;
-		state->unknownBytes = liveBytes;
-		state->unknownBlocks = liveAllocations;
+		state->unknownBytes = data->liveBytes;
+		state->unknownBlocks = data->liveAllocations;
 		break;
 
 #if defined(J9VM_ENV_DATA64)
 	case OMRMEM_CATEGORY_PORT_LIBRARY_UNUSED_ALLOCATE32_REGIONS:
 		state->unused32bitSlabWalked = TRUE;
-		state->unused32bitSlabBytes = liveBytes;
-		state->unused32bitSlabBlocks = liveAllocations;
+		state->unused32bitSlabBytes = data->liveBytes;
+		state->unused32bitSlabBlocks = data->liveAllocations;
 		break;
 #endif
 
 	default:
-		outputErrorMessage(PORTTEST_ERROR_ARGS, "Unexpected categoryCode: %u\n", categoryCode);
+		outputErrorMessage(PORTTEST_ERROR_ARGS, "Unexpected categoryCode: %u\n", data->categoryCode);
 		state->otherError = TRUE;
 		return J9MEM_CATEGORIES_STOP_ITERATING;
 	}
@@ -1467,7 +1468,7 @@ static U_32 categoriesWalked;
  *
  * Used with j9mem_test9_category_walk
  */
-static UDATA categoryWalkFunction2(U_32 categoryCode, const char * categoryName, UDATA liveBytes, UDATA liveAllocations, BOOLEAN isRoot, U_32 parentCategoryCode, OMRMemCategoryWalkState * walkState)
+static UDATA categoryWalkFunction2(OMRMemCategoryWalkState * walkState)
 {
 	categoriesWalked++;
 

@@ -110,7 +110,9 @@ jint RuntimeToolsAgentBase::setup(char * options)
 {
 	jint rc = JVMTI_ERROR_NONE;
 	jvmtiEnv * jvmti_env = NULL;
+	jint versionPtr;
 	char* currentOption = options;
+	jvmtiCapabilities capa = {0};
 
 	/* parse any options */
 	rc = parseArguments(options);
@@ -124,6 +126,16 @@ jint RuntimeToolsAgentBase::setup(char * options)
 		if ((JNI_EVERSION != rc) || JNI_OK != ((rc = _vm->GetEnv((void **) &jvmti_env, JVMTI_VERSION_1_0)))) {
 			error("Failed to GetEnv\n");
 			return AGENT_ERROR_FAILED_TO_GET_JNI_ENV;
+		}
+	}
+
+	jvmti_env->GetVersionNumber(&versionPtr);
+	if (versionPtr == JVMTI_VERSION_11) {
+		capa.can_generate_early_vmstart = 1;
+		rc = jvmti_env->AddCapabilities(&capa);
+		if (rc != JVMTI_ERROR_NONE) {
+			error("Failed to add can_generate_early_vmstart capability\n");
+			return AGENT_ERROR_FAILED_TO_GET_JNI_ENV;	
 		}
 	}
 
