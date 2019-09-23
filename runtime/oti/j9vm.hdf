@@ -1299,4 +1299,33 @@ typedef UDATA (* lookupNativeAddressCallback)(struct J9VMThread *currentThread, 
 		<data type="struct J9VMThread*" name="vmThread" description="current thread" />
 		<data type="U_32" name="state" description="the VM runtime state" />
 	</event>
+
+	<event>
+		<name>J9HOOK_VM_PRE_SNAPSHOT</name>
+		<description>
+			Triggered when JVM is preparing for creating a snapshot
+		</description>
+		<struct>J9VMPreSnapshot</struct>
+		<data type="struct J9JavaVM*" name="vm" description="the Java VM" />
+		<data type="UDATA" name="continueSnapshot" return="true" description="success/fail flag" />
+	</event>
+
+	<event>
+		<name>J9HOOK_VM_POST_SNAPSHOT</name>
+		<description>
+			Triggered after JVM has created a snapshot
+		</description>
+		<struct>J9VMPostSnapshot</struct>
+		<data type="struct J9JavaVM*" name="vm" description="the Java VM" />
+	</event>
+
+	<event>
+		<name>J9HOOK_VM_POST_RESTORE</name>
+		<description>
+			Triggered after JVM has restored from a snapshot
+		</description>
+		<struct>J9VMPostSnapshot</struct>
+		<data type="struct J9JavaVM*" name="vm" description="the Java VM" />
+		<data type="UDATA" name="continueRunning" return="true" description="success/fail flag" />
+	</event>
 </interface>
