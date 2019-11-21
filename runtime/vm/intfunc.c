@@ -370,4 +370,8 @@ J9InternalVMFunctions J9InternalFunctions = {
 #endif
 	areValueTypesEnabled,
 	peekClassHashTable,
+#if defined(JITSERVER_SUPPORT)
+	isJITServerEnabled,
+#endif /* JITSERVER_SUPPORT */
+	createJoinableThreadWithCategory,
 };

@@ -350,3 +350,9 @@ if(NOT JAVA_SPEC_VERSION LESS 14)
 		JVM_GetExtendedNPEMessage
 	)
 endif()
+
+if(JITSERVER_SUPPORT)
+	jvm_add_exports(jvm
+		JITServer_CreateServer
+	)
+endif()

@@ -43,6 +43,7 @@ public:
    TR_Listener();
    static TR_Listener* allocate();
    void startListenerThread(J9JavaVM *javaVM);
+   int32_t waitForListenerThreadExit(J9JavaVM *javaVM);
    void setAttachAttempted(bool b) { _listenerThreadAttachAttempted = b; }
    bool getAttachAttempted() const { return _listenerThreadAttachAttempted; }
 

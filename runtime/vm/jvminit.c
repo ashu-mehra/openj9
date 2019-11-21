@@ -597,6 +597,13 @@ areValueTypesEnabled(J9JavaVM *vm)
 	return J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_VALHALLA);
 }
 
+#if defined(JITSERVER_SUPPORT)
+BOOLEAN
+isJITServerEnabled(J9JavaVM *vm) {
+	return J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_START_JITSERVER);
+}
+#endif /* JITSERVER_SUPPORT */
+
 void
 freeJavaVM(J9JavaVM * vm)
 {
@@ -993,6 +1000,11 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_ARGENCODING_PLATFORM)) {
 		vm->runtimeFlags |= J9_RUNTIME_ARGENCODING_UNICODE;
 	}
+#if defined(JITSERVER_SUPPORT)
+	if (J9_ARE_ALL_BITS_SET(createParams->flags, J9_CREATEJAVAVM_START_JITSERVER)) {
+		vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_ENABLE_START_JITSERVER;
+	}
+#endif /* JITSERVER_SUPPORT */
 
 	initArgs.j2seVersion = createParams->j2seVersion;
 	initArgs.j2seRootDirectory = createParams->j2seRootDirectory;
