@@ -36,7 +36,6 @@
 #include "compile/SymbolReferenceTable.hpp"
 #include "control/Options.hpp"
 #include "control/Options_inlines.hpp"
-#include "cs2/allocator.h"
 #include "cs2/arrayof.h"
 #include "cs2/bitvectr.h"
 #include "cs2/sparsrbit.h"
