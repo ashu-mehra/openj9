@@ -1570,6 +1570,15 @@ uint8_t *compileMethodHandleThunk(j9object_t methodHandle, j9object_t arg, J9VMT
    //
 
    uint8_t *startPC = NULL;
+#if defined(JITSERVER_SUPPORT)
+   // Do not allow local compilations in JITServer server mode
+   TR::CompilationInfo * compInfo = getCompilationInfo(jitConfig);
+   if (compInfo->getPersistentInfo()->getRemoteCompilationMode() == JITServer::SERVER)
+      {
+      fprintf(stderr, "compileMethodHandleThunk> Returning 0 as running in JITServer mode\n");
+      return 0;
+      }
+#endif
    if (cmdLineOptions->getOption(TR_DisableMethodHandleThunks))
       {
       if (details)
