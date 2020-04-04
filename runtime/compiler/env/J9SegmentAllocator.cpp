@@ -78,6 +78,7 @@ SegmentAllocator::allocate(const size_t segmentSize, const std::nothrow_t &tag) 
             }
          }
       }
+   fprintf(stdout, "SegmentAllocator::allocate> allocating new segment of type: 0x%zx, size: %zu\n", _segmentType, alignedSize);
    J9MemorySegment * newSegment =
       _javaVM.internalVMFunctions->allocateMemorySegment(
          &_javaVM,

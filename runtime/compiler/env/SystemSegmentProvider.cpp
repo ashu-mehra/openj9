@@ -97,11 +97,14 @@ J9::SystemSegmentProvider::request(size_t requiredSize)
       }
 
    size_t systemSegmentSize = std::max(roundedSize, _systemSegmentSize);
+   fprintf(stdout, "SystemSegmentProvider::request> _systemBytesAllocated: %zu, systemSegmentSize: %zu, _allocationLimit: %zu\n", _systemBytesAllocated, systemSegmentSize, _allocationLimit);
    if (_systemBytesAllocated + systemSegmentSize > _allocationLimit )
       {
+      fprintf(stdout, "SystemSegmentProvider::request> allocation limit exceeded, throwing bad_alloc\n");
       throw std::bad_alloc();
       }
 
+   fprintf(stdout, "SystemSegmentProvider::request> requesting new system segment\n");
    J9MemorySegment &newSegment = _systemSegmentAllocator.request(systemSegmentSize);
    TR_ASSERT(
       newSegment.heapAlloc == newSegment.heapBase,
