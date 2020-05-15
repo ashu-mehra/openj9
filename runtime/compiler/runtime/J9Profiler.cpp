@@ -353,6 +353,7 @@ void TR_BlockFrequencyProfiler::modifyTrees()
          //
          TR::Node *storeNode;
          TR::SymbolReference *symRef = comp()->getSymRefTab()->createKnownStaticDataSymbolRef(blockFrequencyInfo->getFrequencyForBlock(node->getBlock()->getNumber()), TR::Int32);
+         symRef->getSymbol()->setIsBlockFrequency();
          treeTop = TR::TreeTop::createIncTree(comp(), node, symRef, 1, treeTop);
          storeNode = treeTop->getNode();
 
