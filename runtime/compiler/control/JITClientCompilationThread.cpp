@@ -3125,6 +3125,26 @@ remoteCompilationEnd(
    return relocatedMetaData;
    }
 
+static std::string
+serializePersistentProfileInfo(TR_PersistentProfileInfo *profileInfo)
+   {
+   if (profileInfo)
+      {
+      TR_Serializer serializer = {};
+      serializer.accumulateSize(*profileInfo);
+      uint32_t size = serializer.getSize();
+      uint8_t * buffer = (uint8_t *)TR_Memory::jitPersistentAlloc(size);
+      serializer.setMemoryBuffer(buffer, size);
+      profileInfo->serialize(serializer);
+      std::string profileInfoStr = std::string((char *)buffer, size);
+      TR_Memory::jitPersistentFree(buffer);
+      return profileInfoStr;
+      }
+   else
+      {
+      return std::string();
+      }
+   }
 TR_MethodMetaData *
 remoteCompile(
    J9VMThread * vmThread,
@@ -3222,7 +3242,18 @@ remoteCompile(
 
    auto classInfoTuple = JITServerHelpers::packRemoteROMClassInfo(clazz, compiler->fej9vm()->vmThread(), compiler->trMemory(), serializeClass);   
    std::string optionsStr = TR::Options::packOptions(compiler->getOptions());
-   std::string recompMethodInfoStr = compiler->isRecompilationEnabled() ? std::string((char *) compiler->getRecompilationInfo()->getMethodInfo(), sizeof(TR_PersistentMethodInfo)) : std::string();
+   TR_PersistentMethodInfo *methodInfo = NULL;
+   if (compiler->isRecompilationEnabled())
+      {
+      methodInfo = compiler->getRecompilationInfo()->getMethodInfo();
+      }
+   std::string recompMethodInfoStr = (methodInfo) ? std::string((char *) methodInfo, sizeof(TR_PersistentMethodInfo)) : std::string();
+   std::string recentProfileInfoStr = std::string();
+   std::string bestProfileInfoStr = std::string();
+   if (methodInfo)
+      {
+      J9::Recompilation::serializePersistentProfileInfo(methodInfo, recentProfileInfoStr, bestProfileInfoStr);
+      }
 
    compInfo->getSequencingMonitor()->enter();
    // Collect the list of unloaded classes
@@ -3266,7 +3297,8 @@ remoteCompile(
 
       client->buildCompileRequest(TR::comp()->getPersistentInfo()->getClientUID(), seqNo, romMethodOffset, method,
                                   clazz, *compInfoPT->getMethodBeingCompiled()->_optimizationPlan, detailsStr,
-                                  details.getType(), unloadedClasses, illegalModificationList, classInfoTuple, optionsStr, recompMethodInfoStr,
+                                  details.getType(), unloadedClasses, illegalModificationList, classInfoTuple, optionsStr,
+                                  recompMethodInfoStr, bestProfileInfoStr, recentProfileInfoStr,
                                   chtableUpdates.first, chtableUpdates.second, useAotCompilation);
       JITServer::MessageType response;
       while(!handleServerMessage(client, compiler->fej9vm(), response));
