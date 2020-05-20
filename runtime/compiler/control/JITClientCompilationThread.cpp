@@ -3253,7 +3253,18 @@ remoteCompile(
 
    auto classInfoTuple = JITServerHelpers::packRemoteROMClassInfo(clazz, compiler->fej9vm()->vmThread(), compiler->trMemory(), serializeClass);
    std::string optionsStr = TR::Options::packOptions(compiler->getOptions());
-   std::string recompMethodInfoStr = compiler->isRecompilationEnabled() ? std::string((char *) compiler->getRecompilationInfo()->getMethodInfo(), sizeof(TR_PersistentMethodInfo)) : std::string();
+   TR_PersistentMethodInfo *methodInfo = NULL;
+   if (compiler->isRecompilationEnabled())
+      {
+      methodInfo = compiler->getRecompilationInfo()->getMethodInfo();
+      }
+   std::string recompMethodInfoStr = (methodInfo) ? std::string((char *) methodInfo, sizeof(TR_PersistentMethodInfo)) : std::string();
+   std::string recentProfileInfoStr = std::string();
+   std::string bestProfileInfoStr = std::string();
+   if (methodInfo)
+      {
+      J9::Recompilation::serializePersistentProfileInfo(methodInfo, recentProfileInfoStr, bestProfileInfoStr);
+      }
 
    // TODO: make this a synchronized region to avoid bad_alloc exceptions
    compInfo->getSequencingMonitor()->enter();
@@ -3302,7 +3313,8 @@ remoteCompile(
 
       client->buildCompileRequest(compiler->getPersistentInfo()->getClientUID(), seqNo, lastCriticalSeqNo, romMethodOffset, method,
                                   clazz, *compInfoPT->getMethodBeingCompiled()->_optimizationPlan, detailsStr,
-                                  details.getType(), unloadedClasses, illegalModificationList, classInfoTuple, optionsStr, recompMethodInfoStr,
+                                  details.getType(), unloadedClasses, illegalModificationList, classInfoTuple, optionsStr,
+                                  recompMethodInfoStr, recentProfileInfoStr, bestProfileInfoStr,
                                   chtableUpdates.first, chtableUpdates.second, useAotCompilation, TR::Compiler->vm.isVMInStartupPhase(compInfoPT->getJitConfig()));
       JITServer::MessageType response;
       while(!handleServerMessage(client, compiler->fej9vm(), response));

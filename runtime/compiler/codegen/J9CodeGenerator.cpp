@@ -5235,6 +5235,12 @@ J9::CodeGenerator::needRelocationsForPersistentInfoData()
    {
    return self()->fej9()->needRelocationsForPersistentInfoData();
    }
+
+bool
+J9::CodeGenerator::needRelocationsForPersistentProfileInfoData()
+   {
+   return self()->fej9()->needRelocationsForPersistentProfileInfoData();
+   }
 #endif /* defined(J9VM_OPT_JITSERVER) */
 
 

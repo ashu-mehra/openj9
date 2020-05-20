@@ -112,12 +112,6 @@ J9::Recompilation::setupMethodInfo()
       // has a compilation level set in it (by virtue of a previous compilation)
       //
       _methodInfo = getExistingMethodInfo(_compilation->getCurrentMethod());
-#if defined(J9VM_OPT_JITSERVER)
-      if (comp()->getPersistentInfo()->getRemoteCompilationMode() == JITServer::CLIENT)
-         {
-         TR_ASSERT_FATAL(_methodInfo->profilingDisabled(), "Profiling is not supported in JITServer");
-         }
-#endif /* defined(J9VM_OPT_JITSERVER) */
 
       if (!comp()->fej9()->canRecompileMethodWithMatchingPersistentMethodInfo(comp()) &&
           !comp()->isGPUCompilation())
@@ -766,7 +760,6 @@ J9::Recompilation::persistentJittedBodyInfoFromString(const std::string &bodyInf
    bodyInfo->setMethodInfo(methodInfo);
    bodyInfo->setProfileInfo(NULL);
    bodyInfo->setMapTable(NULL);
-   resetPersistentProfileInfo(methodInfo);
    return bodyInfo;
    }
 
@@ -778,5 +771,66 @@ J9::Recompilation::resetPersistentProfileInfo(TR_PersistentMethodInfo *methodInf
    // which is a client pointer
    methodInfo->_recentProfileInfo = NULL;
    methodInfo->_bestProfileInfo = NULL;
+   }
+
+void
+J9::Recompilation::serializePersistentProfileInfo(TR_PersistentProfileInfo &profileInfo, std::string &profileInfoStr)
+   {
+   uint32_t size = profileInfo.getSizeForSerialization();
+   uint8_t * buffer = (uint8_t *)TR_Memory::jitPersistentAlloc(size);
+   uint8_t * origBuffer = buffer; // buffer gets updated after the serialization
+   profileInfo.serialize(buffer);
+   profileInfoStr.append((char *)origBuffer, size);
+   TR_Memory::jitPersistentFree(origBuffer);
+   }
+
+void
+J9::Recompilation::serializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfileInfoStr)
+   {
+   TR_PersistentProfileInfo *recentProfileInfo = methodInfo->getRecentProfileInfo();
+   TR_PersistentProfileInfo *bestProfileInfo = methodInfo->getBestProfileInfo();
+   if (NULL != recentProfileInfo)
+      {
+      J9::Recompilation::serializePersistentProfileInfo(*recentProfileInfo, recentProfileInfoStr);
+      }
+   if ((NULL != bestProfileInfo) && (bestProfileInfo != recentProfileInfo))
+      {
+      J9::Recompilation::serializePersistentProfileInfo(*bestProfileInfo, bestProfileInfoStr);
+      }
+   }
+
+void
+J9::Recompilation::deserializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfileInfoStr)
+   {
+   TR_PersistentProfileInfo *recentProfileInfo = NULL;
+   TR_PersistentProfileInfo *bestProfileInfo = NULL;
+
+   if ((NULL != methodInfo->_recentProfileInfo) && (recentProfileInfoStr.size() > 0))
+      {
+      uint8_t *profileInfoStr = (uint8_t *)recentProfileInfoStr.c_str();
+      recentProfileInfo = TR_PersistentProfileInfo::deserialize(profileInfoStr);
+      }
+   if (NULL != methodInfo->_bestProfileInfo)
+      {
+      if (methodInfo->_bestProfileInfo == methodInfo->_recentProfileInfo)
+         {
+         bestProfileInfo = recentProfileInfo;
+        }
+      else if (bestProfileInfoStr.size() > 0)
+         {
+         uint8_t *profileInfoStr = (uint8_t *)bestProfileInfoStr.c_str();
+         bestProfileInfo = TR_PersistentProfileInfo::deserialize(profileInfoStr);
+         }
+      }
+   methodInfo->_recentProfileInfo = recentProfileInfo;
+   if (recentProfileInfo)
+      {
+      TR_PersistentProfileInfo::incRefCount(recentProfileInfo);
+      }
+   methodInfo->_bestProfileInfo = bestProfileInfo;
+   if (bestProfileInfo)
+      {
+      TR_PersistentProfileInfo::incRefCount(bestProfileInfo);
+      }
    }
 #endif /* defined(J9VM_OPT_JITSERVER) */
