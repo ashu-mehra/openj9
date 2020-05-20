@@ -1396,10 +1396,10 @@ void fixPersistentMethodInfo(void *table, bool isJITClientAOTLoad)
    bodyInfo->setOldStartCountDelta(TR::Options::_sampleThreshold);
    bodyInfo->setHotStartCountDelta(0);
    bodyInfo->setSampleIntervalCount(0);
-   bodyInfo->setProfileInfo(NULL);
 
    if (!isJITClientAOTLoad)
       {
+      bodyInfo->setProfileInfo(NULL);
       bodyInfo->setIsAotedBody(true);
       }
    }

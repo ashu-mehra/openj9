@@ -330,7 +330,7 @@ TR::CompilationInfoPerThreadRemote::processEntry(TR_MethodToBeCompiled &entry, J
       auto req = stream->readCompileRequest<uint64_t, uint32_t, uint32_t, J9Method *, J9Class*, TR_OptimizationPlan, 
          std::string, J9::IlGeneratorMethodDetailsType,
          std::vector<TR_OpaqueClassBlock*>, std::vector<TR_OpaqueClassBlock*>, 
-         JITServerHelpers::ClassInfoTuple, std::string, std::string, std::string, std::string, bool>();
+         JITServerHelpers::ClassInfoTuple, std::string, std::string, std::string, std::string, std::string, std::string, bool>();
 
       clientId                           = std::get<0>(req);
       seqNo                              = std::get<1>(req); // Sequence number at the client
@@ -345,9 +345,11 @@ TR::CompilationInfoPerThreadRemote::processEntry(TR_MethodToBeCompiled &entry, J
       auto &classInfoTuple               = std::get<10>(req);
       std::string clientOptStr           = std::get<11>(req);
       std::string recompInfoStr          = std::get<12>(req);
-      const std::string &chtableUnloads  = std::get<13>(req);
-      const std::string &chtableMods     = std::get<14>(req);
-      useAotCompilation                  = std::get<15>(req);
+      std::string &recentProfileInfoStr  = std::get<13>(req);
+      std::string &bestProfileInfoStr    = std::get<14>(req);
+      const std::string &chtableUnloads  = std::get<15>(req);
+      const std::string &chtableMods     = std::get<16>(req);
+      useAotCompilation                  = std::get<17>(req);
 
       if (useAotCompilation)
          {
@@ -521,7 +523,8 @@ TR::CompilationInfoPerThreadRemote::processEntry(TR_MethodToBeCompiled &entry, J
          {
          _recompilationMethodInfo = new (PERSISTENT_NEW) TR_PersistentMethodInfo();
          memcpy(_recompilationMethodInfo, recompInfoStr.data(), sizeof(TR_PersistentMethodInfo));
-         J9::Recompilation::resetPersistentProfileInfo(_recompilationMethodInfo);
+         J9::Recompilation::deserializePersistentProfileInfo(_recompilationMethodInfo, recentProfileInfoStr, bestProfileInfoStr);
+         _recompilationMethodInfo->setOptimizationPlan(NULL);
          }
       // Get the ROMClass for the method to be compiled if it is already cached
       // Or read it from the compilation request and cache it otherwise
@@ -1061,7 +1064,8 @@ TR::CompilationInfoPerThreadRemote::getCachedResolvedMethod(TR_ResolvedMethodKey
       TR_ResolvedJ9JITServerMethodInfo methodInfo = make_tuple(methodInfoStruct, 
          methodCacheEntry.persistentBodyInfo ? std::string((const char*)methodCacheEntry.persistentBodyInfo, sizeof(TR_PersistentJittedBodyInfo)) : std::string(), 
          methodCacheEntry.persistentMethodInfo ? std::string((const char*)methodCacheEntry.persistentMethodInfo, sizeof(TR_PersistentMethodInfo)) : std::string(), 
-         methodCacheEntry.IPMethodInfo ? std::string((const char*)methodCacheEntry.IPMethodInfo, sizeof(TR_ContiguousIPMethodHashTableEntry)) : std::string());
+         methodCacheEntry.IPMethodInfo ? std::string((const char*)methodCacheEntry.IPMethodInfo, sizeof(TR_ContiguousIPMethodHashTableEntry)) : std::string(),
+         std::string(), std::string());
       // Re-add validation record
       if (comp->compileRelocatableCode() && comp->getOption(TR_UseSymbolValidationManager) && !comp->getSymbolValidationManager()->inHeuristicRegion())
          {
