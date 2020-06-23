@@ -3571,6 +3571,7 @@ typedef struct J9Method {
 	struct J9ConstantPool* constantPool;
 	void* methodRunAddress;
 	void* volatile extra;
+	uint32_t initialCount;
 } J9Method;
 
 typedef struct J9JNIMethodID {
@@ -4689,6 +4690,7 @@ typedef struct J9InternalVMFunctions {
 	UDATA ( *jniIsInternalClassRef)(struct J9JavaVM *vm, jobject ref);
 	BOOLEAN (*objectIsBeingWaitedOn)(struct J9VMThread *currentThread, struct J9VMThread *targetThread, j9object_t obj);
 	BOOLEAN (*areValueBasedMonitorChecksEnabled)(struct J9JavaVM *vm);
+	void ( *flushAllBytecodeProfilingData)(struct J9JavaVM *vm);
 } J9InternalVMFunctions;
 
 /* Jazz 99339: define a new structure to replace JavaVM so as to pass J9NativeLibrary to JVMTIEnv  */

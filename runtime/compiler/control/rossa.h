@@ -113,7 +113,6 @@ extern "C" {
    int32_t aboutToBootstrap(J9JavaVM * javaVM, J9JITConfig * jitConfig);
    void JitShutdown(J9JITConfig * jitConfig);
    void freeJITConfig(J9JITConfig * jitConfig);
-
 #ifdef __cplusplus
 }
 #endif

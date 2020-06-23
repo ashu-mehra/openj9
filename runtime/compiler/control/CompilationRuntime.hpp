@@ -655,6 +655,7 @@ public:
       if (value < 0)
           value = INT_MAX;
       method->extra = reinterpret_cast<void *>(value);
+      method->initialCount = (uint32_t) value;
       }
 
    static uint32_t getMethodBytecodeSize(const J9ROMMethod * romMethod);

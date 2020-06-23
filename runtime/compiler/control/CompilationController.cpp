@@ -500,13 +500,16 @@ TR::DefaultCompilationStrategy::processInterpreterSample(TR_MethodEvent *event)
          //if(TR::Options::getCmdLineOptions()->getFixedOptLevel() == -1)
          //   compInfo->getPersistentInfo()->getActivationTable()->insert(j9method, totalSampleCount, fe);
 
-         TR_PersistentJittedBodyInfo *bodyInfo = TR::Recompilation::getJittedBodyInfoFromPC(j9method->extra);
-         if (bodyInfo)
-            bodyInfo->_longRunningInterpreted = true;
+         if (j9method->extra != NULL)
+            {
+            TR_PersistentJittedBodyInfo *bodyInfo = TR::Recompilation::getJittedBodyInfoFromPC(j9method->extra);
+            if (bodyInfo)
+               bodyInfo->_longRunningInterpreted = true;
 
-         if (logSampling)
-            curMsg += sprintf(curMsg, " counter = XX (long running?)");
-         // Note that we do not increment globalSampleCount here
+            if (logSampling)
+               curMsg += sprintf(curMsg, " counter = XX (long running?)");
+            // Note that we do not increment globalSampleCount here
+            }
          }
       if (fe->isLogSamplingSet())
          {

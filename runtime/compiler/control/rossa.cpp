@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fstream>
 
 #ifdef WINDOWS
 #include <winsock2.h>
@@ -102,6 +103,7 @@
 
 #include "j9.h"
 #include "j9cfg.h"
+#include "omrlinkedlist.h"
 #include "vmaccess.h"
 #include "jvminit.h"
 #include "j9port.h"
@@ -117,6 +119,17 @@
 #include "runtime/JITServerStatisticsThread.hpp"
 #include "runtime/JITServerIProfiler.hpp"
 #endif
+
+using namespace std;
+
+typedef std::tuple<char *, char *> MethodInfo;
+typedef std::list<MethodInfo, TR::typed_allocator<MethodInfo, TR::PersistentAllocator&>> MethodList;
+
+bool stringComparator(const char *s1, const char *s2) { return strcmp(s1, s2) < 0; }
+typedef bool (*StringComparator)(const char *, const char *);
+typedef std::pair<const char *, MethodList *> ClassToMethodsMapEntry;
+typedef TR::typed_allocator<ClassToMethodsMapEntry, TR::PersistentAllocator&> ClassToMethodsMapAllcator;
+typedef std::map<const char *, MethodList *, StringComparator, ClassToMethodsMapAllcator> ClassToMethodsMap;
 
 extern "C" int32_t encodeCount(int32_t count);
 
@@ -139,6 +152,10 @@ extern "C" UDATA initializeJITRuntimeInstrumentation(J9JavaVM *vm);
 
 extern void *ppcPicTrampInit(TR_FrontEnd *, TR::PersistentInfo *);
 extern TR_Debug *createDebugObject(TR::Compilation *);
+
+extern "C" void printIprofilerStats(TR::Options *options, J9JITConfig * jitConfig, TR_IProfiler *iProfiler);
+
+static uintptr_t compilationSignalHandler(struct OMRPortLibrary *portLib, uint32_t gpType, void *gpInfo, void *handler_arg);
 
 
 bool isQuickstart = false;
@@ -834,25 +851,44 @@ command(J9VMThread * vmThread, const char * cmdString)
    }
 
 static IDATA
-internalCompileClass(J9VMThread * vmThread, J9Class * clazz)
+internalCompileClass(J9VMThread * vmThread, J9Class * clazz, const char *methodName = NULL, const char *methodSig = NULL)
    {
    J9JavaVM * javaVM = vmThread->javaVM;
    J9JITConfig * jitConfg = javaVM->jitConfig;
    TR::CompilationInfo * compInfo = getCompilationInfo(jitConfig);
    TR_J9VMBase *fe = TR_J9VMBase::get(jitConfg, NULL);
-
+   bool methodFound = false;
    // To prevent class unloading we need VM access
    bool threadHadNoVMAccess = (!(vmThread->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS));
    if (threadHadNoVMAccess)
       acquireVMAccess(vmThread);
 
    J9Method * newInstanceThunk = getNewInstancePrototype(vmThread);
-
+   J9UTF8* className = J9ROMCLASS_CLASSNAME(clazz->romClass);
    J9ROMMethod * romMethod = (J9ROMMethod *) J9ROMCLASS_ROMMETHODS(clazz->romClass);
    J9Method * ramMethods = (J9Method *) (clazz->ramMethods);
+   size_t methodNameLen = methodName ? strlen(methodName) : 0;
+   size_t methodSigLen = methodSig ? strlen(methodSig) : 0;
+
    for (uint32_t m = 0; m < clazz->romClass->romMethodCount; m++)
       {
+      if (methodName != NULL && methodSig != NULL)
+         {
+         J9UTF8 *name = J9ROMMETHOD_NAME(romMethod);
+         J9UTF8 *sig = J9ROMMETHOD_SIGNATURE(romMethod);
+         if (!J9UTF8_DATA_EQUALS(J9UTF8_DATA(name), J9UTF8_LENGTH(name), methodName, methodNameLen)
+            || !J9UTF8_DATA_EQUALS(J9UTF8_DATA(sig), J9UTF8_LENGTH(sig), methodSig, methodSigLen))
+            {
+            romMethod = nextROMMethod(romMethod);
+            continue;
+            }
+         else
+            {
+            methodFound = true;
+            }
+         }
       J9Method * method = &ramMethods[m];
+      //fprintf(stdout, "Found J9Method for %.*s.%s%s\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
       if (!(romMethod->modifiers & (J9AccNative | J9AccAbstract))
          && method != newInstanceThunk
          && !TR::CompilationInfo::isCompiled(method)
@@ -869,11 +905,19 @@ internalCompileClass(J9VMThread * vmThread, J9Class * clazz)
          TR_OptimizationPlan *plan = TR::CompilationController::getCompilationStrategy()->processEvent(&event, &newPlanCreated);
          if (plan)
             {
+            //fprintf(stdout, "Created opt plan for %.*s.%s%s\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
             plan->setIsExplicitCompilation(true);
             // If the controller decides to compile this method, trigger the compilation and wait here
 
                { // scope for details
                TR::IlGeneratorMethodDetails details(method);
+               if (TR::Options::isAnyVerboseOptionSet(TR_VerbosePerformance, TR_VerboseCompileStart))
+                  {
+                  if (methodName != NULL)
+                     {
+                     TR_VerboseLog::writeLineLocked(TR_Vlog_COMPSTART, "Sending comp request for method %.*s.%s%s", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+                     }
+                  }
                compInfo->compileMethod(vmThread, details, 0, TR_no, NULL, &queued, plan);
                }
 
@@ -887,9 +931,39 @@ internalCompileClass(J9VMThread * vmThread, J9Class * clazz)
             break;
             }
          }
+      else
+         {
+         if (romMethod->modifiers & (J9AccNative | J9AccAbstract))
+            {
+            TR_VerboseLog::writeLineLocked(TR_Vlog_COMPSTART, "Method %.*s.%s%s not compiled: reason - Native or Abstract\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+            }
+         else if (method == newInstanceThunk)
+            {
+            TR_VerboseLog::writeLineLocked(TR_Vlog_COMPSTART, "Method %.*s.%s%s not compiled: reason - newInstanceThunk\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+            }
+         else if (fe->isThunkArchetype(method))
+            {
+            TR_VerboseLog::writeLineLocked(TR_Vlog_COMPSTART, "Method %.*s.%s%s not compiled: reason - isThunkArchetype\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+            }
+         else if (TR::CompilationInfo::isCompiled(method))
+            {
+            TR_VerboseLog::writeLineLocked(TR_Vlog_COMPSTART, "Method %.*s.%s%s not compiled: reason - already compiled\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+            }
+         }
+      if (methodName != NULL && methodSig != NULL)
+         {
+         break;
+         }
       romMethod = nextROMMethod(romMethod);
       }
 
+   if (methodName != NULL && methodSig != NULL)
+      {
+      if (!methodFound)
+         {
+         //fprintf(stdout, "Failed to find matching method in class: %.*s.%s%s\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+         }
+      }
    if (threadHadNoVMAccess)
       releaseVMAccess(vmThread);
 
@@ -983,6 +1057,7 @@ compileClasses(J9VMThread * vmThread, const char * pattern)
          #undef CLASSNAME_BUFFER_LENGTH
 
          strncpy(classNameString, (char*)J9UTF8_DATA(clazzUTRF8), J9UTF8_LENGTH(clazzUTRF8));
+	 classNameString[J9UTF8_LENGTH(clazzUTRF8)] = '\0';
 
          if (strstr(classNameString, patternString))
             {
@@ -1754,9 +1829,481 @@ onLoadInternal(
          return -1;
       persistentMemory->getPersistentInfo()->setInvokeExactJ2IThunkTable(ieThunkTable);
       }
+   
+   if (getenv("TR_RegisterForSigUsr"))
+      {
+      OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
+      if (omrsig_set_async_signal_handler(compilationSignalHandler, javaVM, OMRPORT_SIG_FLAG_SIGUSR1))
+         {
+         fprintf(stdout, "Failed to register handler for SIGUSR1\n");
+         }
+      if (!getenv("TR_AllowCompilationFromStart"))
+         {
+         TR::CompilationInfo * compInfo = getCompilationInfo(jitConfig);
+         compInfo->getPersistentInfo()->setDisableFurtherCompilation(true);
+         }
+      }
    return 0;
    }
 
+static int32_t
+getJavaThreadCount(J9JavaVM *javaVM)
+   {
+   int32_t count = 0;
+   J9VMThread *vmThread = J9_LINKED_LIST_START_DO(javaVM->mainThread);
+   while (NULL != vmThread)
+      {
+      count += 1;
+      vmThread = J9_LINKED_LIST_NEXT_DO(javaVM->mainThread, vmThread);
+      }
+   return count;
+   }
+
+static UDATA
+cbFrameWalk(J9VMThread* vmThread, J9StackWalkState* state)
+   {
+   FILE *fp = (FILE *)(state->userData3);
+   J9JavaVM *javaVM = (J9JavaVM *)(state->userData1);
+   J9Method* method = state->method;
+   J9Class* methodClass = J9_CLASS_FROM_METHOD(method);
+   J9UTF8* className = J9ROMCLASS_CLASSNAME(methodClass->romClass);
+   J9ROMMethod* romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
+   J9UTF8* methodName = J9ROMMETHOD_NAME(romMethod); 
+   J9UTF8* methodSig = J9ROMMETHOD_SIGNATURE(romMethod);
+   if (*(BOOLEAN *)(state->userData2) == TRUE)
+      {
+      fprintf(stdout, "Stack frame for J9VMThread %p\n", vmThread);
+      *(BOOLEAN *)(state->userData2) = FALSE;
+      }
+   fprintf(stdout, "\tj9method: %p\t%.*s %.*s %.*s\n", method, J9UTF8_LENGTH(className), J9UTF8_DATA(className),
+                               J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName),
+                               J9UTF8_LENGTH(methodSig), J9UTF8_DATA(methodSig));
+   if (!(romMethod->modifiers & J9AccNative))
+      {
+      fprintf(fp, "\t%.*s %.*s %.*s\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className),
+                                  J9UTF8_LENGTH(methodName), J9UTF8_DATA(methodName),
+                                  J9UTF8_LENGTH(methodSig), J9UTF8_DATA(methodSig));
+      }
+   return J9_STACKWALK_KEEP_ITERATING;
+   }
+
+static int32_t
+getJavaThreadsStackMethods(J9JavaVM * javaVM)
+   {
+   int32_t threadCount = getJavaThreadCount(javaVM);
+   J9VMThread* vmThread = J9_LINKED_LIST_START_DO(javaVM->mainThread);
+   FILE *fp = fopen("/tmp/rootmethods.log", "w");
+   if (NULL == fp)
+      {
+      fprintf(stderr, "Failed to open file for logging methods on thread stacks\n");
+      return -1;
+      }
+   for (int32_t i = 0; i < threadCount; i++)
+      {
+      if (vmThread->threadObject)
+         {
+         uintptr_t rc = 0;
+         J9StackWalkState stackWalkState = {0};
+         BOOLEAN newThread = TRUE;
+
+         stackWalkState.walkThread = vmThread;
+         stackWalkState.flags = J9_STACKWALK_ITERATE_FRAMES | J9_STACKWALK_VISIBLE_ONLY; // do I need J9_STACKWALK_RECORD_BYTECODE_PC_OFFSET?
+         stackWalkState.skipCount = 0;
+         stackWalkState.userData1 = javaVM;
+         stackWalkState.userData2 = &newThread;
+         stackWalkState.userData3 = fp;
+         stackWalkState.frameWalkFunction = cbFrameWalk;
+         stackWalkState.errorMode = J9_STACKWALK_ERROR_MODE_IGNORE;
+         rc = javaVM->walkStackFrames(vmThread, &stackWalkState);
+         if (J9_STACKWALK_RC_NONE != rc)
+            {
+            fprintf(stdout, "Stack walk for J9VMThread %p returned %zu\n", vmThread, rc);
+            }
+         }
+      vmThread = J9_LINKED_LIST_NEXT_DO(javaVM->mainThread, vmThread);
+      }
+   if (NULL != fp)
+      {
+      fclose(fp);
+      }
+   return 0;
+   }
+
+static int32_t
+generateJavaMethodsList(J9JavaVM *javaVM, ClassToMethodsMap *classToMethodsMap)
+   {
+   J9ClassWalkState classWalkState;
+   J9Class * clazz = javaVM->internalVMFunctions->allLiveClassesStartDo(&classWalkState, javaVM, NULL);
+   FILE *fp = fopen("/tmp/javamethods.log", "w");
+   if (NULL == fp)
+      {
+      fprintf(stderr, "Failed to open file for logging methods on thread stacks\n");
+      return -1;
+      }
+   fprintf(stdout, "Generating list of java methods\n");
+   while (clazz)
+      {
+      J9ROMClass *romClass = clazz->romClass;
+      J9ROMMethod * romMethod = (J9ROMMethod *) J9ROMCLASS_ROMMETHODS(romClass);
+      J9Method * ramMethods = (J9Method *) (clazz->ramMethods);
+      for (uint32_t i = 0; i < romClass->romMethodCount; i++)
+         {
+         J9Method * method = &ramMethods[i];
+         if (!(romMethod->modifiers & (J9AccNative | J9AccAbstract)))
+            {
+            int32_t count = TR::CompilationInfo::getInvocationCount(method);
+            if (count != method->initialCount)
+               {
+               J9UTF8 *className = J9ROMCLASS_CLASSNAME(romClass);
+               J9UTF8 *name = J9ROMMETHOD_NAME(romMethod);
+               J9UTF8 *sig = J9ROMMETHOD_SIGNATURE(romMethod);
+
+               fprintf(fp, "%.*s.%.*s%.*s\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), J9UTF8_LENGTH(name), J9UTF8_DATA(name), J9UTF8_LENGTH(sig), J9UTF8_DATA(sig));
+
+               if (classToMethodsMap != NULL)
+                  {
+                  char *clazz = (char *)malloc(J9UTF8_LENGTH(className) + 1);
+                  strncpy(clazz, (const char *)J9UTF8_DATA(className), J9UTF8_LENGTH(className));
+                  clazz[J9UTF8_LENGTH(className)] = '\0';
+                  char *mname = (char *)malloc(J9UTF8_LENGTH(name) + 1);
+                  strncpy(mname, (const char *)J9UTF8_DATA(name), J9UTF8_LENGTH(name));
+                  mname[J9UTF8_LENGTH(name)] = '\0';
+                  char *msig = (char *)malloc(J9UTF8_LENGTH(sig) + 1);
+                  strncpy(msig, (const char *)J9UTF8_DATA(sig), J9UTF8_LENGTH(sig));
+                  msig[J9UTF8_LENGTH(sig)] = '\0';
+
+                  ClassToMethodsMap::iterator it = classToMethodsMap->find(clazz);
+                  MethodList *mList = NULL;
+
+                  if (it != classToMethodsMap->end())
+                     {
+                     mList = it->second;
+                     }
+                  else
+                     {
+                     mList = new (PERSISTENT_NEW)MethodList(TR::typed_allocator<MethodInfo, TR::PersistentAllocator &>(TR::Compiler->persistentAllocator()));
+                     classToMethodsMap->insert(ClassToMethodsMapEntry(clazz, mList));
+                     }
+                  mList->push_back(std::make_tuple(mname, msig));
+                  }
+               }
+            }
+         romMethod = nextROMMethod(romMethod);
+         }
+      clazz = javaVM->internalVMFunctions->allLiveClassesNextDo(&classWalkState);
+      }
+   javaVM->internalVMFunctions->allLiveClassesEndDo(&classWalkState);
+   if (fp)
+      {
+      fclose(fp);
+      }
+   return 0;
+   }
+
+static void
+showClassToMethodsMap(ClassToMethodsMap &map)
+   {
+   fprintf(stdout, "Dumping Class to Methods map\n");
+   for (ClassToMethodsMap::iterator it = map.begin(); it != map.end(); it++)
+      {
+      ClassToMethodsMapEntry entry = *it;
+      fprintf(stdout, "class: %s\n", entry.first);
+      for (MethodList::iterator mlit = entry.second->begin(); mlit != entry.second->end(); mlit++)
+         {
+         MethodInfo &minfo = *mlit;
+         fprintf(stdout, "\t method: %s %s\n", std::get<0>(minfo), std::get<1>(minfo));
+        }
+      }
+   }
+
+static int32_t 
+compileMethodsInMap(J9VMThread * vmThread, ClassToMethodsMap &map)
+   {
+   int32_t rc = 0;
+   J9JavaVM * javaVM = vmThread->javaVM;
+   J9InternalVMFunctions *vmFuncs = javaVM->internalVMFunctions;
+   J9JITConfig * jitConfig = javaVM->jitConfig;
+   TR_FrontEnd * vm = TR_J9VMBase::get(jitConfig, vmThread);
+   TR::CompilationInfo * compInfo = TR::CompilationInfo::get(jitConfig);
+   if (!compInfo)
+      return rc;
+   PORT_ACCESS_FROM_JAVAVM(javaVM);
+   int32_t classesFound = 0;
+   FILE *classesNotFoundFile = fopen("/tmp/classesNotFound.log", "w+");
+
+   const char *classesToLoadFile = "classesToLoad.txt";
+   FILE *fp = fopen(classesToLoadFile, "r");
+   if (fp != NULL)
+      {
+      while (!feof(fp))
+         {
+         J9Class *j9class = NULL;
+         char *classToLoad = NULL;
+
+         rc = fscanf(fp, "%ms", &classToLoad);
+         if (rc == EOF)
+            {
+            fprintf(stderr, "End of file %s reached\n", classesToLoadFile);
+            break;
+            }
+         else if (errno != 0)
+            {
+            fprintf(stderr, "Failed to read file %s, items read: %d, errno: %d\n", classesToLoadFile, rc, errno);
+            return -1;
+            }
+         else if (rc != 1)
+            {
+            fprintf(stderr, "Failed to read file %s, items read: %d\n", classesToLoadFile, rc);
+            return -1;
+            }
+         fprintf(stdout, "Attempting to load %s\n", classToLoad);
+         j9class = vmFuncs->internalFindClassUTF8(vmThread, (U_8 *)classToLoad, strlen(classToLoad), javaVM->applicationClassLoader, 0);
+         if (j9class != NULL)
+            {
+            fprintf(stdout, "Successfully loaded %s\n", classToLoad);
+            }
+         else
+            {
+            fprintf(stdout, "Failed to load %s\n", classToLoad);
+            }
+         free(classToLoad);
+         classToLoad = NULL;
+         }
+      }
+
+   fprintf(stdout, "\n\n---------- Compiling methods generated by jarmin ----------\n");
+   for (ClassToMethodsMap::iterator it = map.begin(); it != map.end(); it++)
+      {
+      ClassToMethodsMapEntry entry = *it;
+      const char *className = (const char *)(entry.first);
+      size_t classNameLen = strlen(className);
+      BOOLEAN allDone = FALSE;
+      BOOLEAN canPeek = TRUE;
+      J9ClassLoader *lastMatchLoader = NULL;
+
+      while (!allDone)
+         {
+         J9Class *j9class = NULL;
+         J9ClassLoaderWalkState walkState = {0};
+         J9ClassLoader *classLoader = vmFuncs->allClassLoadersStartDo(&walkState, javaVM, 0);
+
+         while (NULL != classLoader)
+            {
+            if (canPeek)
+               {
+               j9class = vmFuncs->peekClassHashTable(vmThread, classLoader, (U_8 *)className, classNameLen);
+               if (NULL != j9class)
+                  {
+                  if (NULL == lastMatchLoader)
+                     {
+                     classesFound += 1;
+                     }
+                  else
+                     {
+                     fprintf(stdout, "Class %s is loaded by more than one loader, prevLoader=%p, currentLoader=%p\n", className, lastMatchLoader, classLoader);
+                     }
+                  lastMatchLoader = classLoader;
+                  canPeek = FALSE;
+                  break;
+                  }
+               }
+            else if ((lastMatchLoader != NULL) && (lastMatchLoader == classLoader))
+               {
+               canPeek = TRUE;
+               }
+            classLoader= vmFuncs->allClassLoadersNextDo(&walkState);
+            }
+         vmFuncs->allClassLoadersEndDo(&walkState);
+         if (NULL != j9class)
+            {
+            for (MethodList::iterator mlit = entry.second->begin(); mlit != entry.second->end(); mlit++)
+               {
+               MethodInfo &minfo = *mlit;
+               //fprintf(stdout, "Compiling method %s.%s%s\n", className, msig->name, msig->desc);
+               internalCompileClass(vmThread, j9class, std::get<0>(minfo), std::get<1>(minfo));
+               }
+            }
+         else
+            {
+            if (NULL == lastMatchLoader)
+               {
+               if (classesNotFoundFile) fprintf(classesNotFoundFile, "%s\n", className);
+               }
+            allDone = TRUE;
+            }
+         }
+      }
+   if (classesNotFoundFile)
+      {
+      fflush(classesNotFoundFile);
+      fclose(classesNotFoundFile);
+      }
+   fprintf(stdout, "Total classes in the map: %d\n", map.size());
+   fprintf(stdout, "Total classes skipped: %d\n", map.size() - classesFound);
+   return rc;
+   }
+
+static int32_t
+compileJarminMethods(J9VMThread *vmThread, ClassToMethodsMap &classToMethodsMap)
+   {
+   J9JavaVM *javaVM = vmThread->javaVM;
+   int32_t classCount = 0;
+   const char *jarminFile = "/tmp/jarmin_methods.log";
+   FILE *fp = fopen(jarminFile, "r");
+   if (NULL == fp)
+      {
+      return -1;
+      }
+   while (!feof(fp))
+      {
+      char *clazz = NULL;
+      char *method = NULL;
+      char *desc = NULL;
+      int32_t rc = fscanf(fp, "%ms %ms %ms", &clazz, &method, &desc);
+      if (rc == EOF)
+         {
+         fprintf(stderr, "End of file reached\n");
+         break;
+         }
+      else if (errno != 0)
+         {
+         fprintf(stderr, "Failed to read file %s, items read: %d, errno: %d\n", jarminFile, rc, errno);
+         return -1;
+         }
+      else if (rc != 3)
+         {
+         fprintf(stderr, "Failed to read file %s, items read: %d\n", jarminFile, rc);
+         return -1;
+         }
+      ClassToMethodsMap::iterator it = classToMethodsMap.find(clazz);
+      MethodList *mList = NULL;
+
+      if (it != classToMethodsMap.end())
+         {
+         mList = it->second;
+         }
+      else
+         {
+         mList = new (PERSISTENT_NEW)MethodList(TR::typed_allocator<MethodInfo, TR::PersistentAllocator &>(TR::Compiler->persistentAllocator()));
+	 classToMethodsMap.insert(ClassToMethodsMapEntry(clazz, mList));
+         classCount += 1;
+         }
+      mList->push_back(std::make_tuple(method, desc));
+      }
+   //showClassToMethodsMap(classToMethodsMap);
+   fprintf(stdout, "Total classes added to the map: %d\n", classCount);
+   compileMethodsInMap(vmThread, classToMethodsMap);
+
+   fprintf(stdout, "Compilation Done\n");
+
+   if (NULL != fp)
+      {
+      fclose(fp);
+      }
+   }
+
+static uintptr_t
+compilationSignalHandler(struct OMRPortLibrary *portLib, uint32_t gpType, void *gpInfo, void *handler_arg)
+   {
+   J9JavaVM* vm = (J9JavaVM *)handler_arg;
+   TR_J9VMBase * vmBase = TR_J9VMBase::get(vm->jitConfig, NULL);
+   int32_t rc = 0;
+   omrthread_t currentThread;
+   J9VMThread *vmThread = NULL;
+   ClassToMethodsMap classToMethodsMap(stringComparator, ClassToMethodsMapAllcator(TR::Compiler->persistentAllocator()));
+
+   fprintf(stdout, "Caught SIGUSR1 signal, enabling compilation now\n");
+   if (omrthread_attach_ex(&currentThread, J9THREAD_ATTR_DEFAULT))
+      {
+      fprintf(stdout, "Failed to attach current thread\n");
+      return -1;
+      }
+   rc = (int)vm->internalVMFunctions->internalAttachCurrentThread(vm, &vmThread, NULL,
+	J9_PRIVATE_FLAGS_DAEMON_THREAD | J9_PRIVATE_FLAGS_SYSTEM_THREAD |
+	J9_PRIVATE_FLAGS_SYSTEM_THREAD | J9_PRIVATE_FLAGS_ATTACHED_THREAD, omrthread_self());
+   if (JNI_OK != rc)
+      {
+      fprintf(stdout, "Failed to attach current thread as J9VMThread\n");
+      return rc;
+      }
+   fprintf(stdout, "IProfiler stats when signal to invoke jarmin is received\n");
+   printIprofilerStats(TR::Options::getCmdLineOptions(), vm->jitConfig, vmBase->getIProfiler());
+   fprintf(stdout, "------------------------------\n");
+   if (getenv("TR_FlushProfilingBuffers"))
+      {
+      vm->internalVMFunctions->flushAllBytecodeProfilingData(vm);
+      fprintf(stdout, "IProfiler stats after flushing the buffers\n");
+      printIprofilerStats(TR::Options::getCmdLineOptions(), vm->jitConfig, vmBase->getIProfiler());
+      fprintf(stdout, "------------------------------\n");
+      }
+   if (getenv("TR_CompileAllUsedMethods"))
+      { 
+      rc = generateJavaMethodsList(vm, &classToMethodsMap);
+      }
+   else
+      {
+      rc = generateJavaMethodsList(vm, NULL);
+      }
+   if (0 != rc)
+      {
+      fprintf(stderr, "Failed to generated list of java methods\n");
+      return -1;
+      }
+   rc = getJavaThreadsStackMethods(vm);
+   if (0 != rc)
+      {
+      fprintf(stderr, "Failed to get methods on Java threads stack\n");
+      return -1;
+      }
+   else
+      {
+      if (!getenv("TR_DoNotRunJarmin"))
+         {
+         char *mode = getenv("TR_JarminReductionMode");
+         fprintf(stdout, "TR_JarminReductionMode: %s\n", mode);
+         if (getenv("TR_CompileInOrder"))
+            {
+            rc = system("${JRE_HOME}/bin/java -Dorg.eclipse.openj9.jmin.reduction_mode=${TR_JarminReductionMode} -ea -cp ${JARMIN_HOME}/lib/asm-8.0.1.jar:${JARMIN_HOME}/lib/asm-analysis-8.0.1.jar:${JARMIN_HOME}/lib/asm-tree-8.0.1.jar:${JARMIN_HOME}/lib/asm-util-8.0.1.jar:${JARMIN_HOME}/bin/production/jarmin org.eclipse.openj9.JMin ${QUARKUS_REST_CRUD_APP}/target/rest-http-crud-quarkus-1.0.0.Alpha1-SNAPSHOT-runner.jar:${QUARKUS_REST_CRUD_APP}/target/lib:${JRE_HOME}/lib /tmp/rootmethods.log /home/asmehra/data/IBM/ashu-mehra/jarmin/jit.log.methods");
+            }
+         else
+            {
+            rc = system("${JRE_HOME}/bin/java -Dorg.eclipse.openj9.jmin.reduction_mode=${TR_JarminReductionMode} -ea -cp ${JARMIN_HOME}/lib/asm-8.0.1.jar:${JARMIN_HOME}/lib/asm-analysis-8.0.1.jar:${JARMIN_HOME}/lib/asm-tree-8.0.1.jar:${JARMIN_HOME}/lib/asm-util-8.0.1.jar:${JARMIN_HOME}/bin/production/jarmin org.eclipse.openj9.JMin ${QUARKUS_REST_CRUD_APP}/target/rest-http-crud-quarkus-1.0.0.Alpha1-SNAPSHOT-runner.jar:${QUARKUS_REST_CRUD_APP}/target/lib:${JRE_HOME}/lib /tmp/rootmethods.log");
+            }
+         if (0 != rc)
+            {
+            fprintf(stderr, "system() returned %d\n", rc);
+            }
+         else
+            {
+            TR::CompilationInfo * compInfo = getCompilationInfo(vm->jitConfig);
+            compInfo->getPersistentInfo()->setDisableFurtherCompilation(false);
+            vm->internalVMFunctions->internalAcquireVMAccess(vmThread);
+            compileJarminMethods(vmThread, classToMethodsMap);
+            vm->internalVMFunctions->internalReleaseVMAccess(vmThread);
+            }
+         }
+      else
+         {
+         rc = 0;
+         }
+      }
+   TR::CompilationInfo * compInfo = getCompilationInfo(vm->jitConfig);
+   if (getenv("TR_AllowCompileAfterJarmin"))
+      {
+      compInfo->getPersistentInfo()->setDisableFurtherCompilation(false);
+      }
+   else
+      {
+      compInfo->getPersistentInfo()->setDisableFurtherCompilation(true);
+      }
+   if (getenv("TR_DisableIProfilingAfterJarmin"))
+      {
+      stopInterpreterProfiling(vm->jitConfig);
+      }
+   vm->internalVMFunctions->DetachCurrentThread((JavaVM *)vm);
+   omrthread_detach(currentThread);
+   return 0;
+   }
 
 extern "C" int32_t
 aboutToBootstrap(J9JavaVM * javaVM, J9JITConfig * jitConfig)

@@ -2179,6 +2179,14 @@ hashPkgTableNextDo(J9HashTableState* walkState);
 */
 void
 flushBytecodeProfilingData(J9VMThread* vmThread);
+
+/**
+* @brief
+* @param vm 
+* @return void
+*/
+void
+flushAllBytecodeProfilingData(J9JavaVM* vm);
 #endif /* J9VM_INTERP_PROFILING_BYTECODES */
 
 

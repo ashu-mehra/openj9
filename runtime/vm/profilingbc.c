@@ -162,4 +162,34 @@ flushForClassesUnload(J9HookInterface** hook, UDATA eventNum, void* eventData, v
 }
 #endif
 
+void
+flushAllBytecodeProfilingData(J9JavaVM *vm)
+{
+	J9VMThread *vmThread = vm->internalVMFunctions->currentVMThread(vm);
+	J9VMThread *current = vmThread;
+	UDATA profilingBufferSize = vm->jitConfig->iprofilerBufferSize;
+	j9thread_monitor_enter(vm->vmThreadListMutex);
+	BOOLEAN hasVMAccess = ((vmThread->publicFlags & J9_PUBLIC_FLAGS_VM_ACCESS) != 0);
+	if (FALSE == hasVMAccess) {
+		vm->internalVMFunctions->internalAcquireVMAccess(vmThread);
+	}
+	vm->internalVMFunctions->acquireExclusiveVMAccess(vmThread);
+	do {
+		if (current->profilingBufferEnd) {
+			U_8* bufferStart = current->profilingBufferEnd - profilingBufferSize;
+
+			ALWAYS_TRIGGER_J9HOOK_VM_PROFILING_BYTECODE_BUFFER_FULL(
+				vm->hookInterface,
+				current,
+				bufferStart,
+				current->profilingBufferCursor - bufferStart);
+		}
+		current = current->linkNext;
+	} while (current != vmThread);
+	vm->internalVMFunctions->releaseExclusiveVMAccess(vmThread);
+	if (FALSE == hasVMAccess) {
+		vm->internalVMFunctions->internalReleaseVMAccess(vmThread);
+	}
+	j9thread_monitor_exit(vm->vmThreadListMutex);
+}
 #endif /* J9VM_INTERP_PROFILING_BYTECODES */  /* File level ifdef */
