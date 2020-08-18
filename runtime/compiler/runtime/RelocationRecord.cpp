@@ -234,6 +234,9 @@ TR_RelocationRecord::create(TR_RelocationRecord *storage, TR_RelocationRuntime *
       case TR_BlockFrequency:
          reloRecord = new (storage) TR_RelocationRecordBlockFrequency(reloRuntime, record);
          break;
+      case TR_RecompQueuedFlag:
+         reloRecord = new  (storage) TR_RelocationRecordRecompQueuedFlag(reloRuntime, record);
+         break;
       case TR_BodyInfoAddress:
          reloRecord = new (storage) TR_RelocationRecordBodyInfo(reloRuntime, record);
          break;
@@ -836,6 +839,57 @@ int32_t
 TR_RelocationRecordBlockFrequency::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocationHigh, uint8_t *reloLocationLow)
    {
    TR_RelocationRecordBlockFrequencyPrivateData *reloPrivateData = &(privateData()->blockFrequency);
+   reloTarget->storeAddress(reloPrivateData->_addressToPatch, reloLocationHigh, reloLocationLow, reloFlags(reloTarget));
+   return 0;
+   }
+
+// TR_RecompQueuedFlag
+//
+char *
+TR_RelocationRecordRecompQueuedFlag::name()
+   {
+   return "TR_RecompQueuedFlag";
+   }
+
+void
+TR_RelocationRecordRecompQueuedFlag::print(TR_RelocationRuntime *reloRuntime)
+   {
+   TR_RelocationTarget *reloTarget = reloRuntime->reloTarget();
+   TR_RelocationRuntimeLogger *reloLogger = reloRuntime->reloLogger();
+   TR_RelocationRecord::print(reloRuntime);
+   }
+
+void
+TR_RelocationRecordRecompQueuedFlag::preparePrivateData(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget)
+   {
+   TR_RelocationRecordRecompQueuedFlagPrivateData *reloPrivateData = &(privateData()->recompQueuedFlag);
+   reloPrivateData->_addressToPatch = NULL;
+
+   TR_PersistentJittedBodyInfo *bodyInfo = reinterpret_cast<TR_PersistentJittedBodyInfo *>(reloRuntime->exceptionTable()->bodyInfo);
+   if (bodyInfo)
+      {
+      TR_PersistentProfileInfo *profileInfo = bodyInfo->getProfileInfo();
+      if (profileInfo && profileInfo->getBlockFrequencyInfo())
+         {
+         reloPrivateData->_addressToPatch = (uint8_t *)profileInfo->getBlockFrequencyInfo()->getIsQueuedForRecompilation();
+         }
+      }
+   RELO_LOG(reloRuntime->reloLogger(), 6, "\tpreparePrivateData: addressToPatch: %p \n", reloPrivateData->_addressToPatch);
+   }
+
+
+int32_t
+TR_RelocationRecordRecompQueuedFlag::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocation)
+   {
+   TR_RelocationRecordRecompQueuedFlagPrivateData *reloPrivateData = &(privateData()->recompQueuedFlag);
+   reloTarget->storeAddressSequence(reloPrivateData->_addressToPatch, reloLocation, reloFlags(reloTarget));
+   return 0;
+   }
+
+int32_t
+TR_RelocationRecordRecompQueuedFlag::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocationHigh, uint8_t *reloLocationLow)
+   {
+   TR_RelocationRecordRecompQueuedFlagPrivateData *reloPrivateData = &(privateData()->recompQueuedFlag);
    reloTarget->storeAddress(reloPrivateData->_addressToPatch, reloLocationHigh, reloLocationLow, reloFlags(reloTarget));
    return 0;
    }
@@ -5694,4 +5748,5 @@ uint32_t TR_RelocationRecord::_relocationRecordHeaderSizeTable[TR_NumExternalRel
    sizeof(TR_RelocationRecordSymbolFromManagerBinaryTemplate),                       // TR_DiscontiguousSymbolFromManager               = 100
    sizeof(TR_RelocationRecordResolvedTrampolinesBinaryTemplate),                     // TR_ResolvedTrampolines                          = 101
    sizeof(TR_RelocationRecordBlockFrequencyBinaryTemplate),                          // TR_BlockFrequency                               = 102
+   sizeof(TR_RelocationRecordRecompQueuedFlag),                                      // TR_RecompQueuedFlag                             = 103
    };
