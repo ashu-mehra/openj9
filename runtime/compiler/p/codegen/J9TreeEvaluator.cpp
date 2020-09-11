@@ -12625,6 +12625,12 @@ TR::Register *J9::Power::TreeEvaluator::directCallEvaluator(TR::Node *node, TR::
    TR::Linkage      *linkage;
    TR::Register        *returnRegister;
 
+   TR::Compilation *comp = cg->comp();
+
+   if (!strcmp(comp->signature(), "java/lang/Object.<init>()V"))
+      {
+      fprintf(stdout, "J9::Power::TreeEvaluator::directCallEvaluator> signature: %s\n", comp->signature());
+      }
    if (!cg->inlineDirectCall(node, returnRegister))
       {
       TR::SymbolReferenceTable *symRefTab = cg->comp()->getSymRefTab();

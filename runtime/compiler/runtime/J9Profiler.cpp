@@ -354,6 +354,7 @@ void TR_BlockFrequencyProfiler::modifyTrees()
          TR::Node *storeNode;
          TR::SymbolReference *symRef = comp()->getSymRefTab()->createKnownStaticDataSymbolRef(blockFrequencyInfo->getFrequencyForBlock(node->getBlock()->getNumber()), TR::Int32);
          symRef->getSymbol()->setIsBlockFrequency();
+         symRef->getSymbol()->setNotDataAddress();
          treeTop = TR::TreeTop::createIncTree(comp(), node, symRef, 1, treeTop);
          storeNode = treeTop->getNode();
 
@@ -1702,7 +1703,8 @@ TR_BlockFrequencyInfo::TR_BlockFrequencyInfo(
       }
    }
 
-TR_BlockFrequencyInfo::TR_BlockFrequencyInfo(TR_Serializer &serializer) :
+TR_BlockFrequencyInfo::TR_BlockFrequencyInfo(TR_Serializer &serializer, TR_PersistentProfileInfo *currentProfileInfo) :
+   _callSiteInfo(currentProfileInfo->getCallSiteInfo()),
    _numBlocks(serializer.read<int32_t>()),
    _blocks(
       _numBlocks ?
@@ -1725,16 +1727,20 @@ TR_BlockFrequencyInfo::TR_BlockFrequencyInfo(TR_Serializer &serializer) :
    {
    if (_numBlocks)
       {
+      //fprintf(stdout, "TR_BlockFrequencyInfo > Reading _blocks\n");
       serializer.readArray(_blocks, _numBlocks);
+      //fprintf(stdout, "TR_BlockFrequencyInfo > Reading _frequencies\n");
       serializer.readArray(_frequencies, _numBlocks);
 
       _counterDerivationInfo = (TR_BitVector**) new (PERSISTENT_NEW) void**[_numBlocks*2]();
       for (int32_t i = 0; i < (_numBlocks * 2); i++)
          {
+         //fprintf(stdout, "TR_BlockFrequencyInfo > Reading _counterDerivationInfo[%d]\n", i);
          uintptr_t counterDerivationInfo = serializer.read<uintptr_t>();
 
          if (counterDerivationInfo && IS_VALID_BIT_VECTOR(counterDerivationInfo))
             {
+            //fprintf(stdout, "TR_BlockFrequencyInfo > Reading TR_BitVector\n");
             _counterDerivationInfo[i] = new (PERSISTENT_NEW) TR_BitVector(serializer);
             }
          else
@@ -2039,6 +2045,8 @@ TR_BlockFrequencyInfo::generateBlockRawCountCalculationSubTree(TR::Compilation *
       if (((uintptr_t)_counterDerivationInfo[blockNumber * 2]) & 0x1 == 1)
          {
          TR::SymbolReference *symRef = comp->getSymRefTab()->createKnownStaticDataSymbolRef(getFrequencyForBlock(((uintptr_t)_counterDerivationInfo[blockNumber * 2]) >> 1), TR::Int32);
+         symRef->getSymbol()->setIsBlockFrequency();
+         symRef->getSymbol()->setNotDataAddress();
          addRoot = TR::Node::createWithSymRef(node, TR::iload, 0, symRef);
          }
       else
@@ -2047,6 +2055,8 @@ TR_BlockFrequencyInfo::generateBlockRawCountCalculationSubTree(TR::Compilation *
          while (addBVI.hasMoreElements())
             {
             TR::SymbolReference *symRef = comp->getSymRefTab()->createKnownStaticDataSymbolRef(getFrequencyForBlock(addBVI.getNextElement()), TR::Int32);
+            symRef->getSymbol()->setIsBlockFrequency();
+            symRef->getSymbol()->setNotDataAddress();
             TR::Node *counterLoad = TR::Node::createWithSymRef(node, TR::iload, 0, symRef);
             if (addRoot)
                addRoot = TR::Node::create(node, TR::iadd, 2, addRoot, counterLoad);
@@ -2060,6 +2070,8 @@ TR_BlockFrequencyInfo::generateBlockRawCountCalculationSubTree(TR::Compilation *
          if (((uintptr_t)_counterDerivationInfo[blockNumber *2 + 1]) & 0x1 == 1)
             {
             TR::SymbolReference *symRef = comp->getSymRefTab()->createKnownStaticDataSymbolRef(getFrequencyForBlock(((uintptr_t)_counterDerivationInfo[blockNumber * 2 + 1]) >> 1), TR::Int32);
+            symRef->getSymbol()->setIsBlockFrequency();
+            symRef->getSymbol()->setNotDataAddress();
             subRoot = TR::Node::createWithSymRef(node, TR::iload, 0, symRef);
             }
          else
@@ -2068,6 +2080,8 @@ TR_BlockFrequencyInfo::generateBlockRawCountCalculationSubTree(TR::Compilation *
             while (subBVI.hasMoreElements())
                {
                TR::SymbolReference *symRef = comp->getSymRefTab()->createKnownStaticDataSymbolRef(getFrequencyForBlock(subBVI.getNextElement()), TR::Int32);
+               symRef->getSymbol()->setIsBlockFrequency();
+               symRef->getSymbol()->setNotDataAddress();
                TR::Node *counterLoad = TR::Node::createWithSymRef(node, TR::iload, 0, symRef);
                if (subRoot)
                   {
@@ -2335,30 +2349,36 @@ void TR_BlockFrequencyInfo::getSerializedSize(TR_Serializer &serializer) const
             }
          }
       }
+   //fprintf(stdout, "TR_BlockFrequencyInfo::getSerializedSize > serializer.getSize(): %u\n", serializer.getSize());
    }
 
 void TR_BlockFrequencyInfo::serialize(TR_Serializer &serializer) const
    {
+   //fprintf(stdout, "TR_BlockFrequencyInfo::serialize > writing _numBlocks: %d\n", _numBlocks);
    serializer.write(_numBlocks);
    if (_numBlocks)
       {
+      //fprintf(stdout, "TR_BlockFrequencyInfo::serialize > writing _blocks: %p\n", _blocks);
       serializer.writeArray(_blocks, _numBlocks);
+      //fprintf(stdout, "TR_BlockFrequencyInfo::serialize > writing _frequencies: %p\n", _frequencies);
       serializer.writeArray(_frequencies, _numBlocks);
       for (int32_t i = 0; i < (_numBlocks * 2); i++)
          {
+         //fprintf(stdout, "TR_BlockFrequencyInfo::serialize > writing _counterDerivationInfo[%d]: %p\n", i, _counterDerivationInfo[i]);
          serializer.write(_counterDerivationInfo[i]);
          if (_counterDerivationInfo[i] && IS_VALID_BIT_VECTOR(_counterDerivationInfo[i]))
             {
             // write the bit vector
+            //fprintf(stdout, "TR_BlockFrequencyInfo::serialize > serializing TR_BitVector\n");
 	    _counterDerivationInfo[i]->serialize(serializer);
             }
          }
       }
    }
 
-TR_BlockFrequencyInfo * TR_BlockFrequencyInfo::deserialize(TR_Serializer &serializer)
+TR_BlockFrequencyInfo * TR_BlockFrequencyInfo::deserialize(TR_Serializer &serializer, TR_PersistentProfileInfo *currentProfileInfo)
    {
-   return new (PERSISTENT_NEW) TR_BlockFrequencyInfo(serializer);
+   return new (PERSISTENT_NEW) TR_BlockFrequencyInfo(serializer, currentProfileInfo);
    }
 
 const uint32_t TR_CatchBlockProfileInfo::EDOThreshold = 50;
@@ -2400,6 +2420,7 @@ TR_CallSiteInfo::TR_CallSiteInfo(TR_Serializer &serializer) :
    {
    if (_numCallSites > 0)
       {
+      //fprintf(stdout, "TR_CallSiteInfo > Reading _callSites\n");
       serializer.readArray(_callSites, _numCallSites);
       }
    }
@@ -2540,8 +2561,26 @@ TR_PersistentProfileInfo::TR_PersistentProfileInfo(TR_Serializer &serializer) :
    _active(true),
    _refCount(1)
    {
-   _callSiteInfo = serializer.nextDataNotNullPointer() ? TR_CallSiteInfo::deserialize(serializer) : NULL;
-   _blockFrequencyInfo = serializer.nextDataNotNullPointer() ? TR_BlockFrequencyInfo::deserialize(serializer) : NULL;
+   if (serializer.nextDataNotNullPointer())
+      {
+      //fprintf(stdout, "TR_PersistentProfileInfo > reading _callSiteInfo\n");
+      _callSiteInfo = TR_CallSiteInfo::deserialize(serializer);
+      }
+   else
+      {
+      //fprintf(stdout, "TR_PersistentProfileInfo > _callSiteInfo is NULL\n");
+      _callSiteInfo = NULL;
+      }
+   if (serializer.nextDataNotNullPointer())
+      {
+      //fprintf(stdout, "TR_PersistentProfileInfo > reading _blockFrequencyInfo\n");
+      _blockFrequencyInfo = TR_BlockFrequencyInfo::deserialize(serializer, this);
+      }
+   else
+      {
+      //fprintf(stdout, "TR_PersistentProfileInfo > _blockFrequencyInfo is NULL\n");
+      _blockFrequencyInfo = NULL;
+      }
    if (serializer.nextDataNotNullPointer())
       {
       TR_ASSERT(0, "valueProfileInfo pointer should be NULL\n");
@@ -2772,13 +2811,16 @@ void TR_CallSiteInfo::getSerializedSize(TR_Serializer &serializer)
       {
       serializer.addArraySize(_callSites, _numCallSites);
       }
+   //fprintf(stdout, "TR_CallSiteInfo::getSerializedSize > serializer.getSize(): %u\n", serializer.getSize());
    }
 
 void TR_CallSiteInfo::serialize(TR_Serializer &serializer)
    {
+   //fprintf(stdout, "TR_CallSiteInfo::serialize > writing _numCallSites: %d\n", _numCallSites);
    serializer.write(_numCallSites);
    if (_numCallSites > 0)
       {
+      //fprintf(stdout, "TR_CallSiteInfo::serialize > writing _callSites: %p\n", _callSites);
       serializer.writeArray(_callSites, _numCallSites);
       }
    }
@@ -2815,16 +2857,20 @@ void TR_PersistentProfileInfo::getSerializedSize(TR_Serializer &serializer) cons
       {
       serializer.accumulateSize(*_blockFrequencyInfo);
       }
+   //fprintf(stdout, "TR_PersistentProfileInfo::getSerializedSize > serializer.getSize(): %u\n", serializer.getSize());
    }
 
 void TR_PersistentProfileInfo::serialize(TR_Serializer &serializer) const
    {
+   //fprintf(stdout, "TR_PersistentProfileInfo::serialize > writing _callSiteInfo: %p\n", _callSiteInfo);
    serializer.write(_callSiteInfo);
    if (_callSiteInfo)
       {
+      //fprintf(stdout, "TR_PersistentProfileInfo::serialize > serializing _callSiteInfo\n");
       _callSiteInfo->serialize(serializer);
       }
    /* currently valueProfileInfo is not serialized, just write 0 for that */
+   //fprintf(stdout, "TR_PersistentProfileInfo::serialize > writing _blockFrequencyInfo: %p\n", _blockFrequencyInfo);
    serializer.write(_blockFrequencyInfo);
    if (_blockFrequencyInfo)
       {
@@ -2832,6 +2878,7 @@ void TR_PersistentProfileInfo::serialize(TR_Serializer &serializer) const
       }
    /* currently valueProfileInfo is not serialized, just write NULL for that */
    TR_ValueProfileInfo *valueProfileInfo = NULL;
+   //fprintf(stdout, "TR_PersistentProfileInfo::serialize > writing _valueProfileInfo: %p\n", valueProfileInfo);
    serializer.write(valueProfileInfo);
    }
 

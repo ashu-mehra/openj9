@@ -5748,5 +5748,5 @@ uint32_t TR_RelocationRecord::_relocationRecordHeaderSizeTable[TR_NumExternalRel
    sizeof(TR_RelocationRecordSymbolFromManagerBinaryTemplate),                       // TR_DiscontiguousSymbolFromManager               = 100
    sizeof(TR_RelocationRecordResolvedTrampolinesBinaryTemplate),                     // TR_ResolvedTrampolines                          = 101
    sizeof(TR_RelocationRecordBlockFrequencyBinaryTemplate),                          // TR_BlockFrequency                               = 102
-   sizeof(TR_RelocationRecordRecompQueuedFlag),                                      // TR_RecompQueuedFlag                             = 103
+   sizeof(TR_RelocationRecordBinaryTemplate),                                        // TR_RecompQueuedFlag                             = 103
    };

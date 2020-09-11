@@ -637,7 +637,7 @@ class TR_BlockFrequencyInfo
    TR_BlockFrequencyInfo(TR_CallSiteInfo *callSiteInfo, int32_t numBlocks, TR_ByteCodeInfo *blocks, int32_t *frequencies);
 
    // Constructor for creating TR_BlockFrequencyInfo from serialized data
-   TR_BlockFrequencyInfo(TR_Serializer &serializer);
+   TR_BlockFrequencyInfo(TR_Serializer &serializer, TR_PersistentProfileInfo *currentProfileInfo);
 
    ~TR_BlockFrequencyInfo();
 
@@ -669,7 +669,7 @@ class TR_BlockFrequencyInfo
 
    void getSerializedSize(TR_Serializer &serializer) const;
    void serialize(TR_Serializer &serializer) const;
-   static TR_BlockFrequencyInfo * deserialize(TR_Serializer &serializer);
+   static TR_BlockFrequencyInfo * deserialize(TR_Serializer &serializer, TR_PersistentProfileInfo *currentProfileInfo);
 
    private:
 

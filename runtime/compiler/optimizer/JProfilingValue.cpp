@@ -164,6 +164,20 @@ loadConst(TR::DataType dt)
 int32_t
 TR_JProfilingValue::perform() 
    {
+#if defined(J9VM_OPT_JITSERVER)
+   if (comp()->isOutOfProcessCompilation())
+      {
+      if (trace())
+         traceMsg(comp(), "JProfiling has been disabled for AOT\n");
+      return 0;
+      }
+#endif /* defined(J9VM_OPT_JITSERVER) */
+   if (comp()->fej9()->isAOT_DEPRECATED_DO_NOT_USE())
+      {
+      if (trace())
+         traceMsg(comp(), "JProfiling has been disabled for AOT\n");
+      return 0;
+      }
    if (comp()->getProfilingMode() == JProfiling)
       {
       if (trace())

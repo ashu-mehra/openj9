@@ -220,6 +220,8 @@ TR_JProfilingRecompLoopTest::addRecompilationTests(TR::Compilation *comp, Recomp
          {
          TR::Block *calculateLoopRawFreq  = TR::Block::createEmptyBlock(node, comp, remainingCodeBlock->getFrequency());
          TR::SymbolReference *symRef = comp->getSymRefTab()->createKnownStaticDataSymbolRef(bfi->getIsQueuedForRecompilation(), TR::Int32);
+         symRef->getSymbol()->setIsRecompQueuedFlag();
+         symRef->getSymbol()->setNotDataAddress();
          TR::Node *loadIsQueuedForRecompilation = TR::Node::createWithSymRef(node, TR::iload, 0, symRef);
          TR::Node *checkIfQueueForRecompilation = TR::Node::createif(TR::ificmpeq, loadIsQueuedForRecompilation, TR::Node::iconst(node, -1), remainingCodeBlock->getEntry());
          TR::TreeTop *checkIfNeededRecompilationTestTT = TR::TreeTop::create(comp, originalBlock->getLastRealTreeTop(), checkIfQueueForRecompilation);

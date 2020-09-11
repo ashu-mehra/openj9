@@ -1399,7 +1399,7 @@ void fixPersistentMethodInfo(void *table, bool isJITClientAOTLoad)
 
    if (!isJITClientAOTLoad)
       {
-      bodyInfo->setProfileInfo(NULL);
+      //bodyInfo->setProfileInfo(NULL);
       bodyInfo->setIsAotedBody(true);
       }
    }

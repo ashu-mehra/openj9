@@ -191,7 +191,16 @@ TR_OptimizationPlan *TR::DefaultCompilationStrategy::processEvent(TR_MethodEvent
             !TR::CodeCacheManager::instance()->almostOutOfCodeCache())
             plan = TR_OptimizationPlan::alloc(hotnessLevel, true, false);
          else
-            plan = TR_OptimizationPlan::alloc(hotnessLevel);
+            {
+            if (getenv("TR_ProfiledCompFromStart"))
+               {
+               plan = TR_OptimizationPlan::alloc(hotnessLevel, true, false);
+               }
+            else
+               {
+               plan = TR_OptimizationPlan::alloc(hotnessLevel);
+               }
+            }
          *newPlanCreated = true;
          // the optimization plan needs to include opt level and if we do profiling
          // these may change
@@ -523,6 +532,7 @@ TR::DefaultCompilationStrategy::processJittedSample(TR_MethodEvent *event)
    TR_OptimizationPlan *plan = 0;
    TR::Options * cmdLineOptions = TR::Options::getCmdLineOptions();
    J9Method *j9method = event->_j9method;
+   J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(j9method);
    J9JITConfig *jitConfig = event->_vmThread->javaVM->jitConfig;
    TR::CompilationInfo *compInfo = 0;
    if (jitConfig)
@@ -882,6 +892,9 @@ TR::DefaultCompilationStrategy::processJittedSample(TR_MethodEvent *event)
                      // being compiled as scorching hot.
                      // For profiling the platform must support counting recompilation.
                      //
+                     fprintf(stdout, "method name: %.*s\n", J9UTF8_LENGTH(J9ROMMETHOD_NAME(romMethod)), J9UTF8_DATA(J9ROMMETHOD_NAME(romMethod)));
+                     fprintf(stdout, "methodInfo->profilingDisabled: %zu\n", methodInfo->profilingDisabled());
+                     fprintf(stdout, "TR::Recompilation::countingSupported: %zu\n", TR::Recompilation::countingSupported());
                      if (!TR::Options::getCmdLineOptions()->getOption(TR_DisableProfiling) &&
                         TR::Recompilation::countingSupported() && !TR::CodeCacheManager::instance()->almostOutOfCodeCache() &&
                         !(methodInfo->profilingDisabled()))
@@ -980,6 +993,8 @@ TR::DefaultCompilationStrategy::processJittedSample(TR_MethodEvent *event)
                // because this case is used for diagnostic only
                if (bodyInfo->getFastScorchingRecompilation())
                   {
+                  fprintf(stdout, "methodInfo->profilingDisabled: %zu\n", methodInfo->profilingDisabled());
+                  fprintf(stdout, "TR::Recompilation::countingSupported: %zu\n", TR::Recompilation::countingSupported());
                   if (!TR::Options::getCmdLineOptions()->getOption(TR_DisableProfiling) &&
                       TR::Recompilation::countingSupported() &&
                       !(methodInfo->profilingDisabled()))

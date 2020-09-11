@@ -840,7 +840,6 @@ void TR_JProfilingBlock::addRecompilationTests(TR_BlockFrequencyInfo *blockFrequ
       thresholdLocation = &loopRecompileThreshold;
    else
       thresholdLocation = &recompileThreshold;
-
    int32_t startBlockNumber = comp()->getStartBlock()->getNumber();
    blockFrequencyInfo->setEntryBlockNumber(startBlockNumber);
    TR::Node *node = comp()->getMethodSymbol()->getFirstTreeTop()->getNode();
@@ -857,6 +856,7 @@ void TR_JProfilingBlock::addRecompilationTests(TR_BlockFrequencyInfo *blockFrequ
          int32_t *loadAddress = isProfilingCompilation ? blockFrequencyInfo->getIsQueuedForRecompilation() : blockFrequencyInfo->getEnableJProfilingRecompilation();
          TR::SymbolReference *symRef = comp()->getSymRefTab()->createKnownStaticDataSymbolRef(loadAddress, TR::Int32);
          symRef->getSymbol()->setIsRecompQueuedFlag();
+         symRef->getSymbol()->setNotDataAddress();
          TR::Node *enableLoad = TR::Node::createWithSymRef(node, TR::iload, 0, symRef);
          TR::Node *enableTest = TR::Node::createif(TR::ificmpeq, enableLoad, TR::Node::iconst(node, -1), originalFirstBlock->getEntry());
          TR::TreeTop *enableTree = TR::TreeTop::create(comp(), enableTest);
@@ -990,6 +990,7 @@ int32_t TR_JProfilingBlock::perform()
       // add the actual counter to the block
       TR::SymbolReference *symRef = comp()->getSymRefTab()->createKnownStaticDataSymbolRef(blockFrequencyInfo->getFrequencyForBlock(block->getNumber()), TR::Int32);
       symRef->getSymbol()->setIsBlockFrequency();
+      symRef->getSymbol()->setNotDataAddress();
       TR::TreeTop *tree = TR::TreeTop::createIncTree(comp(), block->getEntry()->getNode(), symRef, 1);
       tree->getNode()->setIsProfilingCode();
       block->prepend(tree);

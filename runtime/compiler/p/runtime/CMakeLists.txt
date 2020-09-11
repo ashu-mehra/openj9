@@ -35,6 +35,7 @@ if(OMR_HOST_OS STREQUAL "linux")
 	set(PPC_HW_PROFILER PPCHWProfilerLinux.cpp)
 endif()
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 j9jit_files(
 	p/runtime/${PPC_HW_PROFILER}

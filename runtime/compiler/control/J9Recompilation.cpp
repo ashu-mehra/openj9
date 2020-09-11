@@ -596,7 +596,8 @@ TR_PersistentMethodInfo::TR_PersistentMethodInfo(TR::Compilation *comp) :
       comp->cg()->jitAddPicToPatchOnClassRedefinition((void*)_methodInfo, (void*)&_methodInfo, false);
       }
 
-   if (comp->getOption(TR_DisableProfiling) || comp->fej9()->isAOT_DEPRECATED_DO_NOT_USE())
+   //if (comp->getOption(TR_DisableProfiling) || comp->fej9()->isAOT_DEPRECATED_DO_NOT_USE())
+   if (comp->getOption(TR_DisableProfiling))
       {
       setDisableProfiling();
       }

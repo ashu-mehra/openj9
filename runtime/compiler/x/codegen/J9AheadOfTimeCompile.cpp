@@ -316,6 +316,36 @@ uint8_t *J9::X86::AheadOfTimeCompile::initializeAOTRelocationHeader(TR::Iterated
          }
          break;
 
+      case TR_BlockFrequency:
+         {
+         TR_PersistentProfileInfo *profileInfo = TR::comp()->getRecompilationInfo()->getProfileInfo();
+
+         TR_ASSERT(NULL != profileInfo, "PersistentProfileInfo not found when creating relocation record for block frequency\n");
+         if (NULL == profileInfo)
+            {
+            self()->comp()->failCompilation<J9::AOTRelocationRecordGenerationFailure>("AOT header initialization can't find profile info");
+            }
+
+         TR_BlockFrequencyInfo *blockFrequencyInfo = profileInfo->getBlockFrequencyInfo();
+         TR_ASSERT(NULL != blockFrequencyInfo, "BlockFrequencyInfo not found when creating relocation record for block frequency\n");
+         if (NULL == blockFrequencyInfo)
+            {
+            self()->comp()->failCompilation<J9::AOTRelocationRecordGenerationFailure>("AOT header initialization can't find block frequency info");
+            }
+
+         uintptr_t frequencyArrayBase = reinterpret_cast<uintptr_t>(blockFrequencyInfo->getFrequencyArrayBase());
+         uintptr_t frequencyPtr = reinterpret_cast<uintptr_t>(relocation->getTargetAddress()());
+
+         // relocation target
+         *(uintptr_t *) cursor = frequencyPtr - frequencyArrayBase; // frequencyOffset 
+         cursor += SIZEPOINTER;
+         }
+         break;
+
+      case TR_RecompQueuedFlag:
+         // nothing to do
+         break;
+
       default:
          // initializeCommonAOTRelocationHeader is currently in the process
          // of becoming the canonical place to initialize the platform agnostic
@@ -434,7 +464,7 @@ uint32_t J9::X86::AheadOfTimeCompile::_relocationTargetTypeToHeaderSizeMap[TR_Nu
    sizeof(TR_RelocationRecordSymbolFromManagerBinaryTemplate),         // TR_DiscontiguousSymbolFromManager = 100,
    sizeof(TR_RelocationRecordResolvedTrampolinesBinaryTemplate),       // TR_ResolvedTrampolines = 101,
    sizeof(TR_RelocationRecordBlockFrequencyBinaryTemplate),            // TR_BlockFrequency = 102,
-   sizeof(TR_RelocationRecordRecompQueuedFlag),                        // TR_RecompQueuedFlag = 103
+   8,                                                                  // TR_RecompQueuedFlag = 103
 #else
 
    12,                                              // TR_ConstantPool                        = 0

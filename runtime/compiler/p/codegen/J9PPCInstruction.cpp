@@ -153,6 +153,10 @@ uint8_t *TR::PPCDepImmSymInstruction::generateBinaryEncoding()
             }
          else
             {
+            if (!strcmp(comp->signature(), "java/lang/Object.<init>()V"))
+               {
+               fprintf(stdout, "TR::PPCDepImmSymInstruction::generateBinaryEncoding> signature: %s\n", comp->signature());
+               }
             cg()->addExternalRelocation(new (cg()->trHeapMemory()) TR::ExternalRelocation(cursor,(uint8_t *)getSymbolReference(),TR_HelperAddress, cg()),
                                __FILE__, __LINE__, getNode());
             }

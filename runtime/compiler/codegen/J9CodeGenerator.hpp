@@ -195,6 +195,7 @@ public:
 #if defined(J9VM_OPT_JITSERVER)
    bool needRelocationsForBodyInfoData();
    bool needRelocationsForPersistentInfoData();
+   bool needRelocationsForPersistentProfileInfoData();
 #endif /* defined(J9VM_OPT_JITSERVER) */
 
    // ----------------------------------------
