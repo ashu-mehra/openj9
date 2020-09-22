@@ -227,7 +227,6 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
       case TR_BodyInfoAddress:
       case TR_RamMethod:
       case TR_ClassUnloadAssumption:
-      case TR_RecompQueuedFlag:
          {
          // Nothing to do
          }
