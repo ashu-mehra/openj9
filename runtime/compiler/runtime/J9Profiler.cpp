@@ -2554,7 +2554,7 @@ TR_PersistentProfileInfo::TR_PersistentProfileInfo(TR_Serializer &serializer) :
    _blockFrequencyInfo = serializer.nextDataNotNullPointer() ? TR_BlockFrequencyInfo::deserialize(serializer, this) : NULL;
    if (serializer.nextDataNotNullPointer())
       {
-      TR_FATAL_ASSERT(0, "valueProfileInfo pointer should be NULL\n");
+      TR_ASSERT_FATAL(0, "valueProfileInfo pointer should be NULL\n");
       }
    else
       {
