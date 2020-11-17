@@ -1021,19 +1021,19 @@ TR_ValueProfileInfoManager::getCallGraphProfilingCount(TR::Node *node, TR::Compi
 bool
 TR_ValueProfileInfoManager::isColdCall(TR_OpaqueMethodBlock *method, int32_t byteCodeIndex, TR::Compilation *comp)
    {
-   return (getCallGraphProfilingCount(method, byteCodeIndex, comp) < (comp->getFlowGraph()->getLowFrequency()));
+   return (getCallGraphProfilingCount(method, byteCodeIndex, comp) < (comp->getFlowGraph()->getLowFrequency())) && (!comp->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics));
    }
 
 bool
 TR_ValueProfileInfoManager::isColdCall(TR_OpaqueMethodBlock *calleeMethod, TR_OpaqueMethodBlock *method, int32_t byteCodeIndex, TR::Compilation *comp)
    {
-   return (getCallGraphProfilingCount(calleeMethod, method, byteCodeIndex, comp) < (comp->getFlowGraph()->getLowFrequency()));
+   return (getCallGraphProfilingCount(calleeMethod, method, byteCodeIndex, comp) < (comp->getFlowGraph()->getLowFrequency())) && (!comp->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics));
    }
 
 bool
 TR_ValueProfileInfoManager::isColdCall(TR::Node* node, TR::Compilation *comp)
    {
-   return (comp->fej9()->getIProfilerCallCount(node->getByteCodeInfo(), comp) < (comp->getFlowGraph()->getLowFrequency()));
+   return (comp->fej9()->getIProfilerCallCount(node->getByteCodeInfo(), comp) < (comp->getFlowGraph()->getLowFrequency())) && (!comp->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics));
    }
 
 bool

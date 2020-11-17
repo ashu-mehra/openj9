@@ -1463,6 +1463,7 @@ TR_J9EstimateCodeSize::realEstimateCodeSize(TR_CallTarget *calltarget, TR_CallSt
                   int32_t freqCutoff = 40;
                   bool isColdCall = (((comp()->getMethodHotness() <= warm) && profileManager->isColdCall(targetCallee->_calleeMethod->getPersistentIdentifier(), calltarget->_calleeMethod->getPersistentIdentifier(), i, comp())) || (currentBlock->getFrequency() < freqCutoff)) && !_inliner->alwaysWorthInlining(targetCallee->_calleeMethod, NULL);
 
+		  heuristicTrace(tracer(), "profileManager.isColdCall: %z", profileManager->isColdCall(targetCallee->_calleeMethod->getPersistentIdentifier(), calltarget->_calleeMethod->getPersistentIdentifier(), i, comp()));
                   if (coldCallInfoIsReliable && isColdCall)
                      {
                      heuristicTrace(tracer(),"Depth %d: Skipping estimate on call %s, with count=%d and block frequency %d, because it's cold.",_recursionDepth,calleeName,profileManager->getCallGraphProfilingCount(targetCallee->_calleeMethod->getPersistentIdentifier(), calltarget->_calleeMethod->getPersistentIdentifier(), i, comp()), currentBlock->getFrequency());

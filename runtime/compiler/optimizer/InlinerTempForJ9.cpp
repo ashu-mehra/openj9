@@ -4240,7 +4240,8 @@ TR_MultipleCallTargetInliner::exceedsSizeThreshold(TR_CallSite *callSite, int by
      if (allowBiggerMethods() &&
          !comp()->getMethodSymbol()->doJSR292PerfTweaks() &&
          calleeResolvedMethod &&
-         !j9InlinerPolicy->isInlineableJNI(calleeResolvedMethod, callNode))
+         !j9InlinerPolicy->isInlineableJNI(calleeResolvedMethod, callNode) &&
+         !comp()->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics))
         {
         bytecodeSize = scaleSizeBasedOnBlockFrequency(bytecodeSize,frequency2,borderFrequency, calleeResolvedMethod,callNode,veryColdBorderFrequency);
         }

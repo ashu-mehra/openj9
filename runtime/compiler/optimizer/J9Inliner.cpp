@@ -847,6 +847,7 @@ int32_t TR_InlinerBase::scaleSizeBasedOnBlockFrequency(int32_t bytecodeSize, int
 float TR_MultipleCallTargetInliner::getScalingFactor(float factor)
    {
    return std::max(factor, 0.7f);
+   //return 0.7;
    }
 
 
