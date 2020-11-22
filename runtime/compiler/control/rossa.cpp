@@ -109,6 +109,7 @@
 #include "j9port.h"
 #include "ras/DebugExt.hpp"
 #include "env/exports.h"
+#include "oti/VMHelpers.hpp"
 #if defined(J9VM_OPT_JITSERVER)
 #include "env/JITServerPersistentCHTable.hpp"
 #include "net/CommunicationStream.hpp"
@@ -261,6 +262,7 @@ extern "C" void promoteGPUCompile(J9VMThread *vmThread);
 extern "C" int32_t setUpHooks(J9JavaVM * javaVM, J9JITConfig * jitConfig, TR_FrontEnd * vm);
 extern "C" int32_t startJITServer(J9JITConfig *jitConfig);
 extern "C" int32_t waitJITServerTermination(J9JITConfig *jitConfig);
+extern "C" void jitHookInitializeSendTarget(J9HookInterface * * hook, UDATA eventNum, void * eventData, void * userData);
 
 char *AOTcgDiagOn="1";
 
@@ -889,10 +891,16 @@ internalCompileClass(J9VMThread * vmThread, J9Class * clazz, const char *methodN
          }
       J9Method * method = &ramMethods[m];
       //fprintf(stdout, "Found J9Method for %.*s.%s%s\n", J9UTF8_LENGTH(className), J9UTF8_DATA(className), methodName, methodSig);
+#if 0
       if (!(romMethod->modifiers & (J9AccNative | J9AccAbstract))
          && method != newInstanceThunk
          && !TR::CompilationInfo::isCompiled(method)
          && !fe->isThunkArchetype(method))
+#else
+      if (method != newInstanceThunk
+         && !TR::CompilationInfo::isCompiled(method)
+         && !fe->isThunkArchetype(method))
+#endif
          {
          bool queued = false;
          TR_MethodEvent event;
@@ -1929,10 +1937,62 @@ getJavaThreadsStackMethods(J9JavaVM * javaVM)
    return 0;
    }
 
+static void
+resetMethodRunAddress(J9VMThread *vmThread)
+   {
+   J9JavaVM *javaVM = vmThread->javaVM;
+   J9JITConfig *jitConfig = javaVM->jitConfig;
+   TR::CompilationInfo *compInfo = getCompilationInfo(jitConfig);
+   J9ClassWalkState classWalkState = {0};
+   J9Class *clazz = javaVM->internalVMFunctions->allLiveClassesStartDo(&classWalkState, javaVM, NULL);
+   while (clazz)
+      {
+      J9ROMClass *romClass = clazz->romClass;
+      J9Method *ramMethods = (J9Method *) (clazz->ramMethods);
+      for (uint32_t i = 0; i < romClass->romMethodCount; i++)
+         {
+         J9Method *method = &ramMethods[i];
+         if (!compInfo->isCompiled(method))
+            {
+            J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(method);
+            if (romMethod->modifiers & J9AccNative)
+               {
+               if ((UDATA)method->constantPool & J9_STARTPC_JNI_NATIVE)
+                  {
+                  method->methodRunAddress = J9_BCLOOP_ENCODE_SEND_TARGET(J9_BCLOOP_SEND_TARGET_RUN_JNI_NATIVE); //javaVM->jniSendTarget;
+                  }
+               }
+            else
+               {
+               javaVM->internalVMFunctions->initializeMethodRunAddress(vmThread, method);
+	       method->extra = (void *) -1;
+               }
+            }
+         }
+      clazz = javaVM->internalVMFunctions->allLiveClassesNextDo(&classWalkState);
+      }
+   javaVM->internalVMFunctions->allLiveClassesEndDo(&classWalkState);
+   return;
+   }
+
+static void
+disableCompilations(J9VMThread *vmThread)
+   {
+   J9JavaVM *javaVM = vmThread->javaVM;
+   J9JITConfig * jitConfig = javaVM->jitConfig;
+   TR::CompilationInfo * compInfo = getCompilationInfo(jitConfig);
+   J9HookInterface * * vmHooks = javaVM->internalVMFunctions->getVMHookInterface(javaVM);
+
+   (*vmHooks)->J9HookUnregister(vmHooks, J9HOOK_VM_INITIALIZE_SEND_TARGET, jitHookInitializeSendTarget, NULL);
+   resetMethodRunAddress(vmThread);
+   //jitResetAllMethodsAtStartup(vmThread);
+   return;
+   }
+
 static int32_t
 generateJavaMethodsList(J9JavaVM *javaVM, ClassToMethodsMap *classToMethodsMap)
    {
-   J9ClassWalkState classWalkState;
+   J9ClassWalkState classWalkState = {0};
    J9Class * clazz = javaVM->internalVMFunctions->allLiveClassesStartDo(&classWalkState, javaVM, NULL);
    FILE *fp = fopen("/tmp/javamethods.log", "w");
    if (NULL == fp)
@@ -2287,6 +2347,7 @@ compilationSignalHandler(struct OMRPortLibrary *portLib, uint32_t gpType, void *
          rc = 0;
          }
       }
+   vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_JARMIN_COMPILATIONS_DONE;
    TR::CompilationInfo * compInfo = getCompilationInfo(vm->jitConfig);
    if (getenv("TR_AllowCompileAfterJarmin"))
       {
@@ -2294,7 +2355,16 @@ compilationSignalHandler(struct OMRPortLibrary *portLib, uint32_t gpType, void *
       }
    else
       {
-      compInfo->getPersistentInfo()->setDisableFurtherCompilation(true);
+      if (getenv("TR_DisableFurtherCompilationUsingFlag"))
+         {
+         compInfo->getPersistentInfo()->setDisableFurtherCompilation(true);
+         }
+      else
+         {
+         vm->internalVMFunctions->internalAcquireVMAccess(vmThread);
+         disableCompilations(vmThread);
+         vm->internalVMFunctions->internalReleaseVMAccess(vmThread);
+         }
       }
    if (getenv("TR_DisableIProfilingAfterJarmin"))
       {

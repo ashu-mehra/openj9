@@ -374,7 +374,7 @@ static uint32_t initializeSendTargetHelperFuncHashValueForSpreading(J9Method* me
    return hashValue;
    }
 
-static void jitHookInitializeSendTarget(J9HookInterface * * hook, UDATA eventNum, void * eventData, void * userData)
+void jitHookInitializeSendTarget(J9HookInterface * * hook, UDATA eventNum, void * eventData, void * userData)
    {
    J9VMInitializeSendTargetEvent * event = (J9VMInitializeSendTargetEvent *)eventData;
 

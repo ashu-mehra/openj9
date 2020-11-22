@@ -210,7 +210,10 @@ initializeMethodRunAddress(J9VMThread *vmThread, J9Method *method)
 {
 	J9JavaVM* vm = vmThread->javaVM;
 
-	method->extra = (void *) J9_STARTPC_NOT_TRANSLATED;
+        if (J9_ARE_ANY_BITS_SET(vmThread->javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_JARMIN_COMPILATIONS_DONE))
+		method->extra = (void *)-1;
+        else
+		method->extra = (void *) J9_STARTPC_NOT_TRANSLATED;
 
 #if defined(J9VM_OPT_OPENJDK_METHODHANDLE)
 	if (initializeMethodRunAddressMethodHandle(method)) {

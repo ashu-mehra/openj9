@@ -129,7 +129,7 @@ def usage(out, status):
 def prerequisite_checks():
     check_perf_version()
     check_perfdata_exist()
-    check_perfmap_file_exist()
+    # check_perfmap_file_exist()
 
 def check_perf_version():
     bashCommand = "perf --version"
