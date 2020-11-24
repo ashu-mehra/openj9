@@ -2348,6 +2348,7 @@ compilationSignalHandler(struct OMRPortLibrary *portLib, uint32_t gpType, void *
          }
       }
    vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_JARMIN_COMPILATIONS_DONE;
+   TR::Options::getCmdLineOptions()->setOption(TR_DisableDynamicLoopTransfer);
    TR::CompilationInfo * compInfo = getCompilationInfo(vm->jitConfig);
    if (getenv("TR_AllowCompileAfterJarmin"))
       {
