@@ -1945,6 +1945,7 @@ resetMethodRunAddress(J9VMThread *vmThread)
    TR::CompilationInfo *compInfo = getCompilationInfo(jitConfig);
    J9ClassWalkState classWalkState = {0};
    J9Class *clazz = javaVM->internalVMFunctions->allLiveClassesStartDo(&classWalkState, javaVM, NULL);
+   javaVM->jniSendTarget = J9_BCLOOP_ENCODE_SEND_TARGET(J9_BCLOOP_SEND_TARGET_RUN_JNI_NATIVE);
    while (clazz)
       {
       J9ROMClass *romClass = clazz->romClass;
@@ -1959,7 +1960,7 @@ resetMethodRunAddress(J9VMThread *vmThread)
                {
                if ((UDATA)method->constantPool & J9_STARTPC_JNI_NATIVE)
                   {
-                  method->methodRunAddress = J9_BCLOOP_ENCODE_SEND_TARGET(J9_BCLOOP_SEND_TARGET_RUN_JNI_NATIVE); //javaVM->jniSendTarget;
+                  method->methodRunAddress = javaVM->jniSendTarget;
                   }
                }
             else
@@ -1984,6 +1985,8 @@ disableCompilations(J9VMThread *vmThread)
    J9HookInterface * * vmHooks = javaVM->internalVMFunctions->getVMHookInterface(javaVM);
 
    (*vmHooks)->J9HookUnregister(vmHooks, J9HOOK_VM_INITIALIZE_SEND_TARGET, jitHookInitializeSendTarget, NULL);
+   TR::Options::getCmdLineOptions()->setOption(TR_DisableDynamicLoopTransfer);
+   TR::Options::getCmdLineOptions()->setOption(TR_InhibitRecompilation);
    resetMethodRunAddress(vmThread);
    //jitResetAllMethodsAtStartup(vmThread);
    return;
@@ -2348,7 +2351,6 @@ compilationSignalHandler(struct OMRPortLibrary *portLib, uint32_t gpType, void *
          }
       }
    vm->extendedRuntimeFlags2 |= J9_EXTENDED_RUNTIME2_JARMIN_COMPILATIONS_DONE;
-   TR::Options::getCmdLineOptions()->setOption(TR_DisableDynamicLoopTransfer);
    TR::CompilationInfo * compInfo = getCompilationInfo(vm->jitConfig);
    if (getenv("TR_AllowCompileAfterJarmin"))
       {
