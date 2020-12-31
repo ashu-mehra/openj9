@@ -4056,6 +4056,7 @@ int32_t TR_MultipleCallTargetInliner::scaleSizeBasedOnBlockFrequency(int32_t byt
 
    bool largeCompiledCallee = !comp()->getOption(TR_InlineVeryLargeCompiledMethods) &&
                               isLargeCompiledMethod(calleeResolvedMethod, bytecodeSize, frequency);
+   heuristicTrace(tracer(),"scaleSizeBasedOnBlockFrequency: frequency=%d, borderFrequency=%d, coldBorderFrequency=%d\n", frequency, borderFrequency, coldBorderFrequency);
    if (largeCompiledCallee)
       {
       bytecodeSize = bytecodeSize * TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor;
@@ -4075,7 +4076,7 @@ int32_t TR_MultipleCallTargetInliner::scaleSizeBasedOnBlockFrequency(int32_t byt
 
       heuristicTrace(tracer(),"exceedsSizeThreshold (mct): Scaled down size for call from %d to %d", oldSize, bytecodeSize);
       }
-   else if (frequency < coldBorderFrequency)
+   else if ((frequency < coldBorderFrequency) && !comp()->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics))
       {
       int32_t oldSize = 0;
       if (comp()->trace(OMR::inlining))
@@ -4240,8 +4241,8 @@ TR_MultipleCallTargetInliner::exceedsSizeThreshold(TR_CallSite *callSite, int by
      if (allowBiggerMethods() &&
          !comp()->getMethodSymbol()->doJSR292PerfTweaks() &&
          calleeResolvedMethod &&
-         !j9InlinerPolicy->isInlineableJNI(calleeResolvedMethod, callNode) &&
-         !comp()->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics))
+         !j9InlinerPolicy->isInlineableJNI(calleeResolvedMethod, callNode))
+         //!comp()->getOption(TR_DisableBlockFrequencyBasedInlinerHeuristics))
         {
         bytecodeSize = scaleSizeBasedOnBlockFrequency(bytecodeSize,frequency2,borderFrequency, calleeResolvedMethod,callNode,veryColdBorderFrequency);
         }
