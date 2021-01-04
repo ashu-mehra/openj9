@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2020 IBM Corp. and others
+ * Copyright (c) 2000, 2021 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -232,6 +232,7 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
       case TR_ArrayCopyHelper:
       case TR_ArrayCopyToc:
       case TR_BodyInfoAddressLoad:
+      case TR_RecompQueuedFlag:
          {
          // Nothing to do
          }
@@ -1183,6 +1184,7 @@ J9::AheadOfTimeCompile::dumpRelocationHeaderData(uint8_t *cursor, bool isVerbose
       case TR_ArrayCopyHelper:
       case TR_ArrayCopyToc:
       case TR_BodyInfoAddressLoad:
+      case TR_RecompQueuedFlag:
          {
          self()->traceRelocationOffsets(startOfOffsets, offsetSize, endOfCurrentRecord, orderedPair);
          }
@@ -1918,6 +1920,18 @@ J9::AheadOfTimeCompile::dumpRelocationHeaderData(uint8_t *cursor, bool isVerbose
                                      dcRecord->fidelity(reloTarget),
                                      dcRecord->staticDelta(reloTarget),
                                      (void *)dcRecord->offsetOfNameString(reloTarget));
+            }
+         }
+         break;
+
+      case TR_BlockFrequency:
+         {
+         TR_RelocationRecordBlockFrequency *bfRecord = reinterpret_cast<TR_RelocationRecordBlockFrequency *>(reloRecord);
+
+         self()->traceRelocationOffsets(cursor, offsetSize, endOfCurrentRecord, orderedPair);
+         if (isVerbose)
+            {
+            traceMsg(self()->comp(), "\n Frequency offset %lld", bfRecord->frequencyOffset(reloTarget));
             }
          }
          break;

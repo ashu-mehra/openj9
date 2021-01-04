@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2020 IBM Corp. and others
+ * Copyright (c) 2000, 2021 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -155,6 +155,31 @@ uint8_t *J9::X86::AheadOfTimeCompile::initializeAOTRelocationHeader(TR::Iterated
          }
         break;
 
+      case TR_BlockFrequency:
+         {
+         TR_RelocationRecordBlockFrequency *ptRecord = reinterpret_cast<TR_RelocationRecordBlockFrequency *>(reloRecord);
+         TR_PersistentProfileInfo *profileInfo = TR::comp()->getRecompilationInfo()->getProfileInfo();
+
+         TR_ASSERT(NULL != profileInfo, "PersistentProfileInfo not found when creating relocation record for block frequency\n");
+         if (NULL == profileInfo)
+            {
+            self()->comp()->failCompilation<J9::AOTRelocationRecordGenerationFailure>("AOT header initialization can't find profile info");
+            }
+
+         TR_BlockFrequencyInfo *blockFrequencyInfo = profileInfo->getBlockFrequencyInfo();
+         TR_ASSERT(NULL != blockFrequencyInfo, "BlockFrequencyInfo not found when creating relocation record for block frequency\n");
+         if (NULL == blockFrequencyInfo)
+            {
+            self()->comp()->failCompilation<J9::AOTRelocationRecordGenerationFailure>("AOT header initialization can't find block frequency info");
+            }
+
+         uintptr_t frequencyArrayBase = reinterpret_cast<uintptr_t>(blockFrequencyInfo->getFrequencyArrayBase());
+         uintptr_t frequencyPtr = reinterpret_cast<uintptr_t>(relocation->getTargetAddress());
+         ptRecord->setFrequencyOffset(reloTarget, frequencyPtr - frequencyArrayBase);
+         cursor = relocation->getRelocationData() + TR_RelocationRecord::getSizeOfAOTRelocationHeader(static_cast<TR_RelocationRecordType>(targetKind));
+         }
+         break;
+
       default:
          cursor = self()->initializeCommonAOTRelocationHeader(relocation, reloRecord);
       }
@@ -267,7 +292,9 @@ uint32_t J9::X86::AheadOfTimeCompile::_relocationTargetTypeToHeaderSizeMap[TR_Nu
    sizeof(TR_RelocationRecordSymbolFromManagerBinaryTemplate),         // TR_SymbolFromManager = 98,
    sizeof(TR_RelocationRecordMethodCallAddressBinaryTemplate),         // TR_MethodCallAddress                   = 99,
    sizeof(TR_RelocationRecordSymbolFromManagerBinaryTemplate),         // TR_DiscontiguousSymbolFromManager = 100,
-   sizeof(TR_RelocationRecordResolvedTrampolinesBinaryTemplate),       // TR_ResolvedTrampolines = 101
+   sizeof(TR_RelocationRecordResolvedTrampolinesBinaryTemplate),       // TR_ResolvedTrampolines = 101,
+   sizeof(TR_RelocationRecordBlockFrequencyBinaryTemplate),            // TR_BlockFrequency = 102,
+   8,                                                                  // TR_RecompQueuedFlag = 103
 #else
 
    12,                                              // TR_ConstantPool                        = 0
