@@ -667,7 +667,6 @@ class TR_RelocationRecordRecompQueuedFlag : public TR_RelocationRecord
       TR_RelocationRecordRecompQueuedFlag(TR_RelocationRuntime *reloRuntime, TR_RelocationRecordBinaryTemplate *record) : TR_RelocationRecord(reloRuntime, record) {}
 
       virtual char *name();
-      virtual void print(TR_RelocationRuntime *reloRuntime);
 
       virtual void preparePrivateData(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget);
       virtual int32_t applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocation);

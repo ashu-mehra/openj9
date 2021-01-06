@@ -832,8 +832,11 @@ int32_t
 TR_RelocationRecordBlockFrequency::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocation)
    {
    TR_RelocationRecordBlockFrequencyPrivateData *reloPrivateData = &(privateData()->blockFrequency);
+   if (!reloPrivateData->_addressToPatch)
+      {
+      return compilationAotBlockFrequencyReloFailure;
+      }
    reloTarget->storeAddressSequence(reloPrivateData->_addressToPatch, reloLocation, reloFlags(reloTarget));
-
    return 0;
    }
 
@@ -841,6 +844,10 @@ int32_t
 TR_RelocationRecordBlockFrequency::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocationHigh, uint8_t *reloLocationLow)
    {
    TR_RelocationRecordBlockFrequencyPrivateData *reloPrivateData = &(privateData()->blockFrequency);
+   if (!reloPrivateData->_addressToPatch)
+      {
+      return compilationAotBlockFrequencyReloFailure;
+      }
    reloTarget->storeAddress(reloPrivateData->_addressToPatch, reloLocationHigh, reloLocationLow, reloFlags(reloTarget));
    return 0;
    }
@@ -851,14 +858,6 @@ char *
 TR_RelocationRecordRecompQueuedFlag::name()
    {
    return "TR_RecompQueuedFlag";
-   }
-
-void
-TR_RelocationRecordRecompQueuedFlag::print(TR_RelocationRuntime *reloRuntime)
-   {
-   TR_RelocationTarget *reloTarget = reloRuntime->reloTarget();
-   TR_RelocationRuntimeLogger *reloLogger = reloRuntime->reloLogger();
-   TR_RelocationRecord::print(reloRuntime);
    }
 
 void
@@ -884,6 +883,10 @@ int32_t
 TR_RelocationRecordRecompQueuedFlag::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocation)
    {
    TR_RelocationRecordRecompQueuedFlagPrivateData *reloPrivateData = &(privateData()->recompQueuedFlag);
+   if (!reloPrivateData->_addressToPatch)
+      {
+      return compilationAotRecompQueuedFlagReloFailure;
+      }
    reloTarget->storeAddressSequence(reloPrivateData->_addressToPatch, reloLocation, reloFlags(reloTarget));
    return 0;
    }
@@ -892,6 +895,10 @@ int32_t
 TR_RelocationRecordRecompQueuedFlag::applyRelocation(TR_RelocationRuntime *reloRuntime, TR_RelocationTarget *reloTarget, uint8_t *reloLocationHigh, uint8_t *reloLocationLow)
    {
    TR_RelocationRecordRecompQueuedFlagPrivateData *reloPrivateData = &(privateData()->recompQueuedFlag);
+   if (!reloPrivateData->_addressToPatch)
+      {
+      return compilationAotRecompQueuedFlagReloFailure;
+      }
    reloTarget->storeAddress(reloPrivateData->_addressToPatch, reloLocationHigh, reloLocationLow, reloFlags(reloTarget));
    return 0;
    }

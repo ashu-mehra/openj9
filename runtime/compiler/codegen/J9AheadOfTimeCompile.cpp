@@ -1095,6 +1095,38 @@ J9::AheadOfTimeCompile::initializeCommonAOTRelocationHeader(TR::IteratedExternal
          }
          break;
 
+      case TR_BlockFrequency:
+         {
+         TR_RelocationRecordBlockFrequency *bfRecord = reinterpret_cast<TR_RelocationRecordBlockFrequency *>(reloRecord);
+         TR_RelocationRecordInformation *recordInfo = reinterpret_cast<TR_RelocationRecordInformation *>(relocation->getTargetAddress());
+         TR::SymbolReference *tempSR = reinterpret_cast<TR::SymbolReference *>(recordInfo->data1);
+         TR::StaticSymbol *staticSym = tempSR->getSymbol()->getStaticSymbol();
+
+         uint8_t flags = (uint8_t) recordInfo->data2;
+         TR_ASSERT((flags & RELOCATION_CROSS_PLATFORM_FLAGS_MASK) == 0,  "reloFlags bits overlap cross-platform flags bits\n");
+         bfRecord->setReloFlags(reloTarget, flags);
+
+         TR_PersistentProfileInfo *profileInfo = TR::comp()->getRecompilationInfo()->getProfileInfo();
+         TR_ASSERT(NULL != profileInfo, "PersistentProfileInfo not found when creating relocation record for block frequency\n");
+         if (NULL == profileInfo)
+            {
+            self()->comp()->failCompilation<J9::AOTRelocationRecordGenerationFailure>("AOT header initialization can't find profile info");
+            }
+
+         TR_BlockFrequencyInfo *blockFrequencyInfo = profileInfo->getBlockFrequencyInfo();
+         TR_ASSERT(NULL != blockFrequencyInfo, "BlockFrequencyInfo not found when creating relocation record for block frequency\n");
+         if (NULL == blockFrequencyInfo)
+            {
+            self()->comp()->failCompilation<J9::AOTRelocationRecordGenerationFailure>("AOT header initialization can't find block frequency info");
+            }
+
+         uintptr_t frequencyArrayBase = reinterpret_cast<uintptr_t>(blockFrequencyInfo->getFrequencyArrayBase());
+         uintptr_t frequencyPtr = reinterpret_cast<uintptr_t>(staticSym->getStaticAddress());
+
+         bfRecord->setFrequencyOffset(reloTarget, frequencyPtr - frequencyArrayBase);
+         }
+         break;
+
       default:
          return cursor;
       }
