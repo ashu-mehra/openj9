@@ -138,7 +138,7 @@ public:
    static void resetPersistentProfileInfo(TR_PersistentMethodInfo *methodInfo);
    static void serializePersistentProfileInfo(TR_PersistentProfileInfo &profileInfo, std::string &profileInfoStr);
    static void serializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfielInfoStr);
-   static void deserializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfielInfoStr);
+   static void deserializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfielInfoStr, bool printMsg = false);
 #endif /* defined(J9VM_OPT_JITSERVER) */
 
 protected:

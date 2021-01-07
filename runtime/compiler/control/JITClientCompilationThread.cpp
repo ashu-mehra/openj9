@@ -3263,6 +3263,7 @@ remoteCompile(
    std::string bestProfileInfoStr = std::string();
    if (methodInfo)
       {
+      fprintf(stdout, "remoteCompile> (%s) Calling serializePersistentProfileInfo, recentPI: %p, bestPI: %p\n", compiler->signature(), methodInfo->getRecentProfileInfo(), methodInfo->getBestProfileInfo());
       J9::Recompilation::serializePersistentProfileInfo(methodInfo, recentProfileInfoStr, bestProfileInfoStr);
       }
 

@@ -789,6 +789,7 @@ J9::Recompilation::serializePersistentProfileInfo(TR_PersistentMethodInfo *metho
    {
    TR_PersistentProfileInfo *recentProfileInfo = methodInfo->getRecentProfileInfo();
    TR_PersistentProfileInfo *bestProfileInfo = methodInfo->getBestProfileInfo();
+   //fprintf(stdout, "serializePersistentProfileInfo> recentProfileInfo: %p, bestProfileInfo: %p\n", methodInfo->_recentProfileInfo, methodInfo->_bestProfileInfo);
    if (NULL != recentProfileInfo)
       {
       J9::Recompilation::serializePersistentProfileInfo(*recentProfileInfo, recentProfileInfoStr);
@@ -800,14 +801,16 @@ J9::Recompilation::serializePersistentProfileInfo(TR_PersistentMethodInfo *metho
    }
 
 void
-J9::Recompilation::deserializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfileInfoStr)
+J9::Recompilation::deserializePersistentProfileInfo(TR_PersistentMethodInfo *methodInfo, std::string &recentProfileInfoStr, std::string &bestProfileInfoStr, bool printMsg)
    {
    TR_PersistentProfileInfo *recentProfileInfo = NULL;
    TR_PersistentProfileInfo *bestProfileInfo = NULL;
-
+   if (printMsg)
+      fprintf(stdout, "deserializePersistentProfileInfo> recentProfileInfo: %p, bestProfileInfo: %p\n", methodInfo->_recentProfileInfo, methodInfo->_bestProfileInfo);
    if ((NULL != methodInfo->_recentProfileInfo) && (recentProfileInfoStr.size() > 0))
       {
       uint8_t *profileInfoStr = (uint8_t *)recentProfileInfoStr.c_str();
+      //fprintf(stdout, "deserializePersistentProfileInfo> deserialize recentProfileInfo\n");
       recentProfileInfo = TR_PersistentProfileInfo::deserialize(profileInfoStr);
       }
    if (NULL != methodInfo->_bestProfileInfo)
@@ -819,6 +822,7 @@ J9::Recompilation::deserializePersistentProfileInfo(TR_PersistentMethodInfo *met
       else if (bestProfileInfoStr.size() > 0)
          {
          uint8_t *profileInfoStr = (uint8_t *)bestProfileInfoStr.c_str();
+         //fprintf(stdout, "deserializePersistentProfileInfo> deserialize bestProfileInfo\n");
          bestProfileInfo = TR_PersistentProfileInfo::deserialize(profileInfoStr);
          }
       }

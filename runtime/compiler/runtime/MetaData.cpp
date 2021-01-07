@@ -1173,12 +1173,21 @@ populateBodyInfo(
                {
                bestProfileInfo->serialize(buffer);
                }
+            fprintf(stdout, "populateBodyInfo> (%s) Serialized profile info, recentPI: %p, bestPI: %p\n", comp->signature(), recentProfileInfo, bestProfileInfo);
             }
 
          J9JITDataCacheHeader *aotMethodHeader = (J9JITDataCacheHeader *)comp->getAotMethodDataStart();
          TR_AOTMethodHeader *aotMethodHeaderEntry =  (TR_AOTMethodHeader *)(aotMethodHeader + 1);
          aotMethodHeaderEntry->offsetToPersistentInfo = ((char *) persistentInfo - sizeof(J9JITDataCacheHeader) - (char *)aotMethodHeader);
 
+         if (recentProfileInfo)
+            {
+            TR_PersistentProfileInfo::decRefCount(recentProfileInfo);
+            }
+         if (bestProfileInfo)
+            {
+            TR_PersistentProfileInfo::decRefCount(bestProfileInfo);
+            }
          //Free the old copies of body/method info
          TR_Memory::jitPersistentFree(bodyInfoSrc);
          TR_Memory::jitPersistentFree(methodInfoSrc);

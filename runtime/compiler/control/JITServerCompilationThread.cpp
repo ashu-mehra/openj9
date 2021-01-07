@@ -561,7 +561,8 @@ TR::CompilationInfoPerThreadRemote::processEntry(TR_MethodToBeCompiled &entry, J
          {
          _recompilationMethodInfo = new (PERSISTENT_NEW) TR_PersistentMethodInfo();
          memcpy(_recompilationMethodInfo, recompInfoStr.data(), sizeof(TR_PersistentMethodInfo));
-         J9::Recompilation::deserializePersistentProfileInfo(_recompilationMethodInfo, recentProfileInfoStr, bestProfileInfoStr);
+         fprintf(stdout, "processEntry> Calling deserializePersistentProfileInfo\n");
+         J9::Recompilation::deserializePersistentProfileInfo(_recompilationMethodInfo, recentProfileInfoStr, bestProfileInfoStr, true);
          _recompilationMethodInfo->setOptimizationPlan(NULL);
          }
       // Get the ROMClass for the method to be compiled if it is already cached

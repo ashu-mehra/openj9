@@ -1704,6 +1704,7 @@ TR_ResolvedJ9JITServerMethod::packMethodInfo(TR_ResolvedJ9JITServerMethodInfo &m
    std::string bestProfileInfoStr = std::string();
    if (persistentMethodInfo)
       {
+      //fprintf(stdout, "packMethodInfo> (%s) Calling serializePersistentProfileInfo\n", comp->signature());
       J9::Recompilation::serializePersistentProfileInfo(persistentMethodInfo, recentProfileInfoStr, bestProfileInfoStr);
       }
    std::get<4>(methodInfo) = recentProfileInfoStr;
@@ -1768,8 +1769,12 @@ TR_ResolvedJ9JITServerMethod::unpackMethodInfo(TR_OpaqueMethodBlock * aMethod, T
 
    if (_bodyInfo)
       {
+      //TR_J9VMBase *fej9 = (TR_J9VMBase *)fe;
+      //TR::Compilation *comp = fej9->_compInfoPT->getCompilation();
+      //TR::Compilation *comp = TR::comp();
       std::string recentProfileInfoStr = std::get<4>(methodInfo);
       std::string bestProfileInfoStr = std::get<5>(methodInfo);
+      //fprintf(stdout, "unpackMethodInfo> Calling deserializePersistentProfileInfo\n");
       J9::Recompilation::deserializePersistentProfileInfo(_bodyInfo->getMethodInfo(), recentProfileInfoStr, bestProfileInfoStr);
       _bodyInfo->setProfileInfo(_bodyInfo->getMethodInfo()->getRecentProfileInfo());
       }

@@ -68,6 +68,7 @@
 
 static TR_PersistentProfileInfo *getProfilingInfoForCFG(TR::Compilation *comp, TR::CFG *cfg)
    {
+   fprintf(stdout, "getProfilingInfoForCFG> (%s)\n", comp->signature());
    TR_PersistentProfileInfo *info = TR_PersistentProfileInfo::get(comp);
    if (cfg == comp->getFlowGraph()
        && comp->getRecompilationInfo())
